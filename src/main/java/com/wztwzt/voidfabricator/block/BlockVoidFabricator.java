@@ -35,7 +35,7 @@ public class BlockVoidFabricator extends BlockContainer {
         if (!world.isRemote && placer instanceof EntityPlayer player) {
             TileEntity tile = world.getTileEntity(x, y, z);
             if (tile instanceof TileVoidFabricator fabricator) {
-                fabricator.bindOwner(player.getUniqueID());
+                fabricator.bindOwner(player);
             }
         }
         super.onBlockPlacedBy(world, x, y, z, placer, stack);

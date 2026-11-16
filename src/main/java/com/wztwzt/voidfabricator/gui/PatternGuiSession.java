@@ -16,6 +16,8 @@ import com.wztwzt.voidfabricator.pattern.PatternPoolView;
 import com.wztwzt.voidfabricator.pattern.PatternView;
 import com.wztwzt.voidfabricator.tile.TileVoidFabricator;
 
+import cpw.mods.fml.common.FMLCommonHandler;
+
 /** Shared state and server actions for one machine recipe pool and its visible scroll window. */
 public final class PatternGuiSession {
 
@@ -120,11 +122,11 @@ public final class PatternGuiSession {
     private void afterViewChange() {
         if (data != null) {
             refreshView();
-            if (viewSync != null) {
+            if (viewSync != null && !isClientSide()) {
                 viewSync.notifyUpdate();
             }
         }
-        if (tile != null) {
+        if (tile != null && !isClientSide()) {
             tile.markDirty();
         }
     }
@@ -158,7 +160,10 @@ public final class PatternGuiSession {
         }
         view.setSelected(globalIndex);
         if (selected != null) {
-            selected.setIntValue(globalIndex, true, true);
+            // A client must never call sync() on a value that is not marked
+            // allowC2S: MUI2 throws "Sync handler is unable to send packets to
+            // server!" and the GUI packet storm shows up as flickering panels.
+            selected.setIntValue(globalIndex, true, !isClientSide());
         }
     }
 
@@ -173,8 +178,14 @@ public final class PatternGuiSession {
     public void selectPool(int index) {
         setRequestedPool(index);
         if (selectedPool != null) {
-            selectedPool.setIntValue(requestedPool, true, true);
+            selectedPool.setIntValue(requestedPool, true, !isClientSide());
         }
+    }
+
+    private static boolean isClientSide() {
+        return FMLCommonHandler.instance()
+            .getEffectiveSide()
+            .isClient();
     }
 
     private void setRequestedPool(int index) {

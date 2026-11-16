@@ -1,6 +1,25 @@
 # Changelog
 
-## 0.3.4-alpha — 2026-11-16
+## 0.3.5-alpha — 2026-11-16
+
+### English
+
+- NEI shortcuts on the virtual pattern grid now resolve the actual MUI screen wrapper (`ModularScreen.getCurrent()`) instead of checking the wrapper class name, which never matched. Literal A/R/P and NEI's configured `bookmark.add`, `recipe.recipe` and `recipe.usage` bindings both work; A calls NEI's public `BookmarkPanel.addOrRemoveItem` and preserves fluid display stacks, R opens crafting, P/U opens the custom pattern page.
+- Disabled and filtered cells now draw a red X above the item/fluid icon, not under it. The cell icon subtree lets hover continue to the cell button, restoring the hover tooltip and A/R/P target.
+- The block now writes the AE proxy owner on placement (`bindOwner(EntityPlayer)`), so a secured AE network accepts the first connection instead of scheduling `securityBreak` and dropping the block. An existing node is updated through `AENetworkProxy.readFromNBT(null)`.
+- The tile re-registers its wireless EU owner with GregTech on `onReady`, so the server keeps working after a restart with the player offline. The block UI now shows the wireless link state and balance; zero balance is shown as `no_power`.
+- Added a non-destructive `securityBreak` safety net so a rejected AE connection cannot delete the block or its installed patterns. Static build passed; in-game verification remains with the user.
+- Fixed the client-side selection/view sync writes that raised `Sync handler is unable to send packets to server!` and caused the intermittent double-GUI flicker: selection and view refreshes now only send packets from the server side.
+
+### 简体中文
+
+- 虚拟样板格的 NEI 快捷键改为通过 `ModularScreen.getCurrent()` 解包真正的 MUI 屏幕，而不是判断包装类名（此前永远不匹配）。字面 A/R/P 与 NEI 配置的 `bookmark.add`、`recipe.recipe`、`recipe.usage` 都兼容；A 走 NEI 公开的 `BookmarkPanel.addOrRemoveItem`，流体保留真实流体显示栈；R 打开合成查询，P/U 打开自定义样板页。
+- 禁用和筛除的格子把红叉画在物品/流体图标之上，而不是被图标覆盖。图标子树允许 hover 继续传递给格子按钮，恢复悬停 tooltip 与 A/R/P 的悬停目标。
+- 方块放置时写入 AE 代理主人（`bindOwner(EntityPlayer)`），安全 AE 网络会接受首次连接，不再触发 `securityBreak` 掉落方块；已有节点通过 `AENetworkProxy.readFromNBT(null)` 立即补写主人。
+- tile 在 `onReady` 重新向 GregTech 注册无线 EU 主人，服务器重启且玩家离线时仍可供电/合成。方块 UI 增加无线连接状态和余额显示；余额为 0 显示 `no_power`。
+- 增加非破坏性的 `securityBreak` 安全网：AE 安全校验拒绝连接时不会删除方块和已安装样板。静态构建通过，实机验证仍由用户执行。
+- 修复客户端错误发送 selection/view 同步导致的 `Sync handler is unable to send packets to server!` 与双 GUI 频闪：选择和视图刷新现在只在服务端发包。
+
 
 ### English
 

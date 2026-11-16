@@ -32,6 +32,8 @@ public final class VoidFabricatorGui {
     public static ModularPanel build(TileVoidFabricator tile, PosGuiData data, PanelSyncManager syncManager,
         UISettings uiSettings) {
         StringSyncValue state = new StringSyncValue(tile::getStatusKey);
+        StringSyncValue wirelessState = new StringSyncValue(tile::getWirelessStatusKey);
+        StringSyncValue wirelessBalance = new StringSyncValue(tile::getWirelessBalanceText);
         IntSyncValue published = new IntSyncValue(tile::getPublishedPatternCount);
         LongSyncValue pendingBatches = new LongSyncValue(tile::getPendingBatchCount);
         IntSyncValue pendingTypes = new IntSyncValue(tile::getPendingStackTypes);
@@ -39,6 +41,8 @@ public final class VoidFabricatorGui {
         BooleanSyncValue online = new BooleanSyncValue(tile::isAeOnline);
 
         syncManager.syncValue("voidfabricator_state", 0, state);
+        syncManager.syncValue("voidfabricator_wireless_state", 0, wirelessState);
+        syncManager.syncValue("voidfabricator_wireless_balance", 0, wirelessBalance);
         syncManager.syncValue("voidfabricator_published", 0, published);
         syncManager.syncValue("voidfabricator_pending_batches", 0, pendingBatches);
         syncManager.syncValue("voidfabricator_pending_types", 0, pendingTypes);
@@ -66,7 +70,16 @@ public final class VoidFabricatorGui {
                     .asWidget()
                     .pos(8, 28)
                     .size(204, 1))
-            .child(statusPanel(state, published, pendingBatches, pendingTypes, skipped, online))
+            .child(
+                statusPanel(
+                    state,
+                    wirelessState,
+                    wirelessBalance,
+                    published,
+                    pendingBatches,
+                    pendingTypes,
+                    skipped,
+                    online))
             .child(
                 new TextWidget<>(IKey.lang("voidfabricator.gui.pattern_slots")).pos(9, 94)
                     .scale(0.85f)
@@ -94,8 +107,9 @@ public final class VoidFabricatorGui {
         return panel;
     }
 
-    private static ParentWidget<?> statusPanel(StringSyncValue state, IntSyncValue published,
-        LongSyncValue pendingBatches, IntSyncValue pendingTypes, IntSyncValue skipped, BooleanSyncValue online) {
+    private static ParentWidget<?> statusPanel(StringSyncValue state, StringSyncValue wirelessState,
+        StringSyncValue wirelessBalance, IntSyncValue published, LongSyncValue pendingBatches,
+        IntSyncValue pendingTypes, IntSyncValue skipped, BooleanSyncValue online) {
         ParentWidget<?> status = new ParentWidget<>().pos(8, 33)
             .size(204, 56)
             .background(
@@ -148,7 +162,35 @@ public final class VoidFabricatorGui {
             .textAlign(Alignment.TopRight)
             .color(() -> online.getBoolValue() ? 0xFF55DFA6 : 0xFFF08B78);
         status.child(networkLine);
+
+        TextWidget<?> wirelessLine = new TextWidget<>(IKey.dynamic(() -> wirelessText(wirelessState, wirelessBalance)));
+        wirelessLine.pos(5, 49)
+            .size(194, 6)
+            .scale(0.55f)
+            .maxWidth(194)
+            .color(() -> wirelessColor(wirelessState));
+        status.child(wirelessLine);
         return status;
+    }
+
+    private static String wirelessText(StringSyncValue wirelessState, StringSyncValue wirelessBalance) {
+        String key = wirelessState.getStringValue();
+        if (key == null || key.isEmpty()) {
+            key = "unbound";
+        }
+        return StatCollector.translateToLocal("voidfabricator.gui.wireless." + key) + " "
+            + wirelessBalance.getStringValue();
+    }
+
+    private static int wirelessColor(StringSyncValue wirelessState) {
+        String key = wirelessState.getStringValue();
+        if ("linked".equals(key)) {
+            return 0xFF55DFA6;
+        }
+        if ("no_power".equals(key)) {
+            return 0xFFF0C06A;
+        }
+        return 0xFFF08B78;
     }
 
     private static String stateText(StringSyncValue state) {

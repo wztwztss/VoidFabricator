@@ -301,6 +301,11 @@ public final class PatternItemPanel {
             public boolean canHover() {
                 return false;
             }
+
+            @Override
+            public boolean canHoverThrough() {
+                return true;
+            }
         }.item(new EntryValue(session, localIndex))
             .displayAmount(false)
             .pos(1, 1)
@@ -313,6 +318,11 @@ public final class PatternItemPanel {
             @Override
             public boolean canHover() {
                 return false;
+            }
+
+            @Override
+            public boolean canHoverThrough() {
+                return true;
             }
         }.pos(1, 1)
             .size(CELL_SIZE - 2, CELL_SIZE - 2));
@@ -332,16 +342,35 @@ public final class PatternItemPanel {
             .background(new DynamicDrawable(() -> cellBackground(session, localIndex)))
             .hoverBackground(new DynamicDrawable(() -> cellHover(session, localIndex, hover)))
             .child(icon)
-            .overlay(new DynamicDrawable(() -> cellOverlay(session, localIndex)))
+            // WidgetTree draws children after overlay(), so a red cross placed in overlay()
+            // was always covered by the 18x18 item icon. This child is appended after the
+            // icon and therefore renders visibly above it.
+            .child(new IDrawable.DrawableWidget(new DynamicDrawable(() -> cellOverlay(session, localIndex))) {
+
+                @Override
+                public boolean canHover() {
+                    return false;
+                }
+
+                @Override
+                public boolean canHoverThrough() {
+                    return true;
+                }
+            }.pos(0, 0)
+                .size(CELL_SIZE, CELL_SIZE))
             .syncHandler(new InteractionSyncHandler().setOnMousePressed(delta -> {
                 int globalIndex = session.entryGlobalIndex(localIndex);
                 if (globalIndex < 0) {
                     return;
                 }
-                session.select(globalIndex);
+                // Selection is a server-side view write. Calling select() from the
+                // client callback tries to send a C2S sync packet from a non-sync
+                // thread and raises "Sync handler is unable to send packets to
+                // server!" (the source of the intermittent double-GUI flicker).
                 if (delta.isClient()) {
                     return;
                 }
+                session.select(globalIndex);
                 if (delta.mouseButton == 0) {
                     if (session.isEntryFiltered(localIndex)) {
                         session.restoreEntry(globalIndex);
@@ -455,12 +484,12 @@ public final class PatternItemPanel {
     }
 
     private static IDrawable disabledDim() {
-        return new Rectangle().color(0xD9221616)
+        return new Rectangle().color(0x99221616)
             .solid();
     }
 
     private static IDrawable filteredDim() {
-        return new Rectangle().color(0xAA101010)
+        return new Rectangle().color(0x80101010)
             .solid();
     }
 
@@ -639,6 +668,16 @@ public final class PatternItemPanel {
         @Override
         public boolean canHover() {
             return false;
+        }
+
+        /**
+         * The icon subtree must not swallow the cell button's hover: NEI A/R/P
+         * (and this cell's tooltip) depend on {@link PatternCellButton} receiving
+         * onMouseStartHover().
+         */
+        @Override
+        public boolean canHoverThrough() {
+            return true;
         }
     }
 

@@ -83,10 +83,33 @@ public class TileVoidFabricator extends AENetworkTile
         return proxy;
     }
 
+    /**
+     * AE2 normally destroys an unauthorized machine with drops when the security
+     * check rejects a connection. This block is already owner-bound, so a
+     * rejected connection must not remove it or its installed patterns. The
+     * connection itself is still rejected by AE2; the owner fix in
+     * {@link #bindOwner(EntityPlayer)} is what makes the normal case succeed.
+     */
+    @Override
+    public void securityBreak() {
+        lastError = "security_mismatch";
+        LOGGER.warn(
+            "AE security rejected the Void Fabricator connection at {},{}; block retained",
+            xCoord,
+            yCoord,
+            zCoord);
+    }
+
     @Override
     public void onReady() {
         super.onReady();
         if (worldObj != null && !worldObj.isRemote) {
+            // Re-register the owner after a server restart. GregTech's wireless
+            // energy map is UUID/team based and does not require the player to be
+            // online, but the mapping must exist before the first craft.
+            if (ownerUuid != null) {
+                WirelessGridEnergy.ensureUser(ownerUuid);
+            }
             reloadPatterns();
         }
     }
@@ -185,6 +208,25 @@ public class TileVoidFabricator extends AENetworkTile
         return ownerUuid;
     }
 
+    /** Returns whether this block has a usable owner binding and wireless balance. */
+    public String getWirelessStatusKey() {
+        UUID owner = ownerUuid;
+        if (owner == null) {
+            return "unbound";
+        }
+        if (worldObj != null && !worldObj.isRemote) {
+            WirelessGridEnergy.ensureUser(owner);
+        }
+        return WirelessGridEnergy.balance(owner)
+            .signum() > 0 ? "linked" : "no_power";
+    }
+
+    /** Server-side balance shown by the block UI. */
+    public String getWirelessBalanceText() {
+        UUID owner = ownerUuid;
+        return owner == null ? "-" : String.format("%,d", WirelessGridEnergy.balance(owner));
+    }
+
     /**
      * Binds the player whose GregTech wireless EU map pays for accepted crafts.
      * The first player to place or open the block owns the binding; later
@@ -197,6 +239,41 @@ public class TileVoidFabricator extends AENetworkTile
         ownerUuid = playerUuid;
         if (worldObj != null && !worldObj.isRemote) {
             WirelessGridEnergy.ensureUser(playerUuid);
+        }
+        markDirty();
+    }
+
+    /**
+     * Applies the AE security owner as well as the GregTech wireless owner.
+     *
+     * <p>
+     * {@link appeng.me.helpers.AENetworkProxy} stores its owner only until the
+     * grid node is created. A secured AE network rejects the first connection
+     * from a machine with no player ID, and {@code GridNode.MachineSecurityBreak}
+     * then calls {@code AEBaseTile.securityBreak()}, which destroys the block
+     * with drops. Setting the proxy owner before the node is created prevents
+     * that connection failure; for an already-created node,
+     * {@code readFromNBT(null)} applies the stored owner as AE2's own
+     * {@code onReady()} path does.
+     */
+    public void bindOwner(EntityPlayer player) {
+        if (player == null) {
+            return;
+        }
+        UUID playerUuid = player.getUniqueID();
+        if (ownerUuid == null) {
+            bindOwner(playerUuid);
+        }
+        if (ownerUuid == null || !ownerUuid.equals(playerUuid)) {
+            return;
+        }
+        AENetworkProxy proxy = getProxy();
+        if (proxy == null) {
+            return;
+        }
+        proxy.setOwner(player);
+        if (worldObj != null && !worldObj.isRemote) {
+            proxy.readFromNBT(null);
         }
         markDirty();
     }
@@ -427,8 +504,8 @@ public class TileVoidFabricator extends AENetworkTile
         if (!blockInteraction) {
             return false;
         }
-        if (worldObj != null && !worldObj.isRemote && ownerUuid == null && player != null) {
-            bindOwner(player.getUniqueID());
+        if (worldObj != null && !worldObj.isRemote && player != null) {
+            bindOwner(player);
         }
         // A normal right-click with a pattern belongs to the item's own UI.
         if (held != null && ItemMachineRecipePoolPattern.isPoolPattern(held) && !player.isSneaking()) {
