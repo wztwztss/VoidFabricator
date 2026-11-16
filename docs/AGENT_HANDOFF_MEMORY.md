@@ -1,6 +1,6 @@
 # VoidFabricator — 当前交接记忆
 
-更新时间：2026-11-16（GT 无线 EU 扣电 + 0.3.2-alpha）  
+更新时间：2026-11-16（0.3.3-alpha：同产物阈值、协同扫描、紧凑样板 NBT、排除红叉）  
 当前基线：**方块 27 张实体样板 + 每张样板一台机器 + 独立 325×309 GT 标准机壳 UI + 普通 AE 原生下单 + 方块主人无线 EU 原子扣电**。  
 本文取代“一张样板 27 个独立机器池”的交接记录；不要按旧语义继续修改。
 
@@ -35,15 +35,23 @@ E:\wzt\MC\PL genmulu\GT New Horizons 2.9.0_migrated\.minecraft
 最终 jar：
 
 ```text
-build/libs/VoidFabricator-0.3.2-alpha.jar
-大小：160,882 字节
-SHA-256：4E8AFB054CE935E096AC9F969CF3961360526F7EFFE719EFC857C7DFC4F66405
+build/libs/VoidFabricator-0.3.3-alpha.jar
+大小：172,033 字节
+SHA-256：BEF5C27863F846BFE96C5B7A121BC88783F96FAABFA86A85E970D4B62EA60800
 ```
 
 已安装并核对同哈希：
 
 ```text
-E:\wzt\MC\PL genmulu\GT New Horizons 2.9.0_migrated\.minecraft\mods\VoidFabricator-0.3.2-alpha.jar
+E:\wzt\MC\PL genmulu\GT New Horizons 2.9.0_migrated\.minecraft\mods\VoidFabricator-0.3.3-alpha.jar
+大小：172,033 字节
+SHA-256：BEF5C27863F846BFE96C5B7A121BC88783F96FAABFA86A85E970D4B62EA60800
+```
+
+0.3.2 备份：
+
+```text
+build/backup/VoidFabricator-0.3.2-alpha-before-0.3.3.jar
 大小：160,882 字节
 SHA-256：4E8AFB054CE935E096AC9F969CF3961360526F7EFFE719EFC857C7DFC4F66405
 ```
@@ -182,7 +190,7 @@ SHA-256：FDEC249E8023BB258E2AEF3DED1CA634DD06C08A921D6E639094BD360D0C133E
 
 - 27 格在方块中，是实体样板；每张样板只有一台机器。
 - 每张样板各有一套筛选、删除和倍增配置。
-- “筛选相同”开关切换同产物一行分组：同一主输出一行、行内列为该产物备选；右键仍切换主输出黑白名单。
+- “筛选相同”开关切换同产物一行分组：同一主输出一行、行内列为该产物备选；只有该产物有两条及以上配方时才占行，单条产物不单独成行；右键仍切换主输出黑白名单。
 - 删除按完整 RecipeKey，重扫不补回。
 - 多张实体样板相同 RecipeKey 只在 AE 发布一次。
 - 重复配方的倍增采用所有来源最严格设置，防止绕过关闭状态。
