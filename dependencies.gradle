@@ -1,0 +1,24 @@
+/*
+ * Void Fabricator dependency baseline.
+ *
+ * The jars in libs/ are copied from the existing GTNH development workspace and
+ * are used as compile-time references only. AE2-QoL is optional: its bridge is
+ * loaded reflectively only when ae2_qof exists, and no ae2_qof source is added.
+ */
+dependencies {
+    // AE2 needs MCP names for its API overrides, so it is deobfuscated.
+    compileOnly(rfg.deobf(project.files("libs/appliedenergistics2-rv3-beta-1083-GTNH.jar")))
+    // GT5U in this workspace is already usable as a compile-time jar. Do NOT
+    // run it through rfg.deobf: its classes include high-version bytecode and
+    // the deobfuscation transform rejects them (major version 69).
+    compileOnly(project.files("libs/gregtech-5.09.54.205.jar"))
+    compileOnly(project.files("libs/modularui2-2.3.92-1.7.10.jar"))
+    // MUI2 slot contracts extend GTNH ModularUI's IItemHandler.
+    compileOnly(project.files("libs/modularui-1.3.4.jar"))
+    // Optional smart-doubling bridge; loaded reflectively only when ae2_qof exists.
+    compileOnly(project.files("libs/ae2-qol-4.5.0-fix30.jar"))
+    // NEI is client-only at runtime; compileOnly keeps the optional R/P bridge type-safe.
+    compileOnly(project.files("libs/NotEnoughItems-2.8.171-GTNH.jar"))
+    compileOnly(project.files("libs/CodeChickenCore-1.4.22.jar"))
+    compileOnly("com.github.GTNewHorizons:GTNHLib:0.11.54")
+}

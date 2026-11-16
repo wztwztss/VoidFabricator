@@ -1,0 +1,23 @@
+# Local third-party compile-time jars (not redistributed in this repository)
+libs/*
+!libs/README.md
+
+# Gradle
+.gradle/
+build/
+out/
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+
+# Runtime
+run/
+logs/
+crash-reports/
+
+# Local test artifacts
+*.log
