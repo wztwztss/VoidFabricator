@@ -1,12 +1,14 @@
 package com.wztwzt.voidfabricator.tile;
 
 import java.lang.reflect.Method;
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.inventory.InventoryCrafting;
@@ -29,9 +31,9 @@ import com.cleanroommc.modularui.value.sync.PanelSyncManager;
 import com.wztwzt.voidfabricator.VoidFabricator;
 import com.wztwzt.voidfabricator.ae.OutputBuffer;
 import com.wztwzt.voidfabricator.ae.VirtualPatternDetails;
+import com.wztwzt.voidfabricator.energy.WirelessGridEnergy;
 import com.wztwzt.voidfabricator.gui.VoidFabricatorGui;
 import com.wztwzt.voidfabricator.item.ItemMachineRecipePoolPattern;
-import com.wztwzt.voidfabricator.pattern.PatternEntry;
 import com.wztwzt.voidfabricator.pattern.PatternPoolData;
 import com.wztwzt.voidfabricator.pattern.RecipePoolSlot;
 import com.wztwzt.voidfabricator.recipe.GTMachineScanner;
@@ -67,6 +69,8 @@ public class TileVoidFabricator extends AENetworkTile
     private ItemStack legacyMachine;
     private volatile List<VirtualPatternDetails> publishedPatterns = Collections.emptyList();
     private final OutputBuffer outputBuffer = new OutputBuffer();
+    private UUID ownerUuid;
+    private String energyStatus = "";
     private String lastError = "empty";
     private ICraftingMedium craftingMedium;
     private boolean mediumResolved;
@@ -125,6 +129,9 @@ public class TileVoidFabricator extends AENetworkTile
         if (legacyMachine != null) {
             data.setTag("Machine", legacyMachine.writeToNBT(new NBTTagCompound()));
         }
+        if (ownerUuid != null) {
+            data.setString("OwnerUUID", ownerUuid.toString());
+        }
         data.setTag("OutputBuffer", outputBuffer.writeNBT());
     }
 
@@ -147,6 +154,16 @@ public class TileVoidFabricator extends AENetworkTile
         }
         legacyMachine = data.hasKey("Machine", 10) ? ItemStack.loadItemStackFromNBT(data.getCompoundTag("Machine"))
             : null;
+        ownerUuid = null;
+        String owner = data.getString("OwnerUUID");
+        if (!owner.isEmpty()) {
+            try {
+                ownerUuid = UUID.fromString(owner);
+            } catch (IllegalArgumentException exception) {
+                LOGGER.warn("Ignoring invalid Void Fabricator owner UUID: {}", owner);
+            }
+        }
+        energyStatus = "";
         outputBuffer.readNBT(data.getCompoundTag("OutputBuffer"));
         publishedPatterns = Collections.emptyList();
         patternOwners.clear();
@@ -162,6 +179,34 @@ public class TileVoidFabricator extends AENetworkTile
             patternData[slot].setOnChanged(this::onPatternEdited);
         }
         return patternData[slot];
+    }
+
+    public UUID getOwnerUuid() {
+        return ownerUuid;
+    }
+
+    /**
+     * Binds the player whose GregTech wireless EU map pays for accepted crafts.
+     * The first player to place or open the block owns the binding; later
+     * interactions must not silently redirect the charge to another player.
+     */
+    public void bindOwner(UUID playerUuid) {
+        if (playerUuid == null || ownerUuid != null) {
+            return;
+        }
+        ownerUuid = playerUuid;
+        if (worldObj != null && !worldObj.isRemote) {
+            WirelessGridEnergy.ensureUser(playerUuid);
+        }
+        markDirty();
+    }
+
+    private void setEnergyStatus(String status) {
+        String next = status == null ? "" : status;
+        if (!energyStatus.equals(next)) {
+            energyStatus = next;
+            markDirty();
+        }
     }
 
     /** Legacy accessor for old editor classes; the block GUI uses the indexed accessor. */
@@ -301,10 +346,41 @@ public class TileVoidFabricator extends AENetworkTile
             return false;
         }
 
+        BigInteger cost = WirelessGridEnergy.cost(virtualDetails.getSnapshot(), multiplier);
+        UUID owner = ownerUuid;
+        if (cost.signum() > 0) {
+            if (owner == null) {
+                setEnergyStatus("no_owner");
+                return false;
+            }
+            BigInteger balance = WirelessGridEnergy.balance(owner);
+            if (balance.compareTo(cost) < 0) {
+                setEnergyStatus("insufficient_power");
+                return false;
+            }
+            if (!WirelessGridEnergy.charge(owner, cost)) {
+                // The balance changed between the check and the atomic debit.
+                setEnergyStatus("insufficient_power");
+                return false;
+            }
+        }
+
+        boolean charged = cost.signum() > 0;
+        try {
+            outputBuffer.add(outputs, multiplier);
+        } catch (RuntimeException exception) {
+            if (charged) {
+                WirelessGridEnergy.refund(owner, cost);
+            }
+            setEnergyStatus("buffer_error");
+            LOGGER.error("Could not buffer an accepted Void Fabricator craft; EU was refunded", exception);
+            return false;
+        }
+
         for (int slot = 0; slot < virtualDetails.getAEInputs().length; slot++) {
             meInventory.setInventorySlotContents(slot, (IAEStack<?>) null);
         }
-        outputBuffer.add(outputs, multiplier);
+        setEnergyStatus("");
         markDirty();
         return true;
     }
@@ -351,6 +427,9 @@ public class TileVoidFabricator extends AENetworkTile
         if (!blockInteraction) {
             return false;
         }
+        if (worldObj != null && !worldObj.isRemote && ownerUuid == null && player != null) {
+            bindOwner(player.getUniqueID());
+        }
         // A normal right-click with a pattern belongs to the item's own UI.
         if (held != null && ItemMachineRecipePoolPattern.isPoolPattern(held) && !player.isSneaking()) {
             return false;
@@ -391,6 +470,7 @@ public class TileVoidFabricator extends AENetworkTile
             int configuredPatterns = getConfiguredPatternCount();
             int machines = 0;
             boolean scanError = false;
+            boolean[] scanning = { false };
             for (int slot = 0; slot < PATTERN_SLOTS; slot++) {
                 PatternPoolData data = getPatternData(slot);
                 if (data == null) {
@@ -408,23 +488,20 @@ public class TileVoidFabricator extends AENetworkTile
                     data.ensureScans();
                     ScanResult scan = data.getScan();
                     if (scan == null) {
-                        scanError = true;
+                        if (data.isScanning()) {
+                            scanning[0] = true;
+                        } else {
+                            scanError = true;
+                        }
                         continue;
                     }
-                    Map<String, RecipeSnapshot> byKey = new LinkedHashMap<>();
-                    for (RecipeSnapshot snapshot : scan.recipes()) {
-                        byKey.put(
-                            snapshot.getKey()
-                                .value(),
-                            snapshot);
-                    }
-                    for (PatternEntry entry : data.getEntries()) {
+                    data.forEachEntryRaw(entry -> {
                         if (!data.isEntryAllowed(entry)) {
-                            continue;
+                            return;
                         }
-                        RecipeSnapshot snapshot = byKey.get(entry.getKey());
+                        RecipeSnapshot snapshot = data.getSnapshot(entry);
                         if (snapshot == null) {
-                            continue;
+                            return;
                         }
                         VirtualPatternDetails pattern = uniquePatterns.get(entry.getKey());
                         if (pattern == null) {
@@ -436,7 +513,7 @@ public class TileVoidFabricator extends AENetworkTile
                         if (!owners.contains(data)) {
                             owners.add(data);
                         }
-                    }
+                    });
                 } catch (RuntimeException exception) {
                     scanError = true;
                     LOGGER.error("Could not scan pattern slot {} at {} {} {}", slot, xCoord, yCoord, zCoord, exception);
@@ -449,6 +526,8 @@ public class TileVoidFabricator extends AENetworkTile
                 lastError = "no_machine";
             } else if (scanError) {
                 lastError = "scan_error";
+            } else if (scanning[0]) {
+                lastError = "scanning";
             } else {
                 lastError = publishedPatterns.isEmpty() ? "no_entries" : "ready";
             }
@@ -536,6 +615,9 @@ public class TileVoidFabricator extends AENetworkTile
     }
 
     public String getStatusKey() {
+        if (!energyStatus.isEmpty()) {
+            return energyStatus;
+        }
         return lastError == null ? "ready" : lastError;
     }
 

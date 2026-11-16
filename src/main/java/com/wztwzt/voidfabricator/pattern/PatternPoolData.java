@@ -180,15 +180,9 @@ public final class PatternPoolData {
             }
         }
         RecipePoolSlot primary = pools.get(0);
-        primary.setMachine(null);
         primary.setMachine(primaryMachine);
-        primary.rescan(true, deleted);
-        for (PatternEntry entry : primary.getEntries()) {
-            PatternEntry previous = merged.get(entry.getKey());
-            if (previous != null) {
-                entry.setEnabled(previous.isEnabled());
-            }
-        }
+        // The actual recipe scan is deliberately deferred to the server-tick
+        // scan queue; world loading must not block on a >10k recipe map.
         trimToPrimaryPool();
     }
 
@@ -264,7 +258,13 @@ public final class PatternPoolData {
             return;
         }
         pool.setMachine(normalized);
-        pool.rescan(true, deleted);
+        pool.startRescan(true, deleted, this::onPoolScanFinished);
+        updateStatus();
+        save();
+        changed();
+    }
+
+    private void onPoolScanFinished() {
         updateStatus();
         save();
         changed();
@@ -308,6 +308,36 @@ public final class PatternPoolData {
         copy.setPoolIndex(ref.pool.getIndex());
         copy.setGlobalIndex(globalIndex);
         return copy;
+    }
+
+    /** Read-only iteration without copying every entry in a large pool. */
+    public void forEachEntryRaw(java.util.function.Consumer<PatternEntry> consumer) {
+        for (RecipePoolSlot pool : pools) {
+            for (PatternEntry entry : pool.getEntries()) {
+                consumer.accept(entry);
+            }
+        }
+    }
+
+    public RecipeSnapshot getSnapshot(PatternEntry entry) {
+        if (entry == null || entry.getKey() == null) {
+            return null;
+        }
+        int poolIndex = entry.getPoolIndex();
+        if (poolIndex >= 0 && poolIndex < pools.size()) {
+            RecipeSnapshot snapshot = pools.get(poolIndex)
+                .getSnapshot(entry.getKey());
+            if (snapshot != null) {
+                return snapshot;
+            }
+        }
+        for (RecipePoolSlot pool : pools) {
+            RecipeSnapshot snapshot = pool.getSnapshot(entry.getKey());
+            if (snapshot != null) {
+                return snapshot;
+            }
+        }
+        return null;
     }
 
     public List<PatternFilter> getFilters() {
@@ -370,9 +400,11 @@ public final class PatternPoolData {
 
     public int getAllowedCount() {
         Set<String> keys = new HashSet<>();
-        for (PatternEntry entry : getEntries()) {
-            if (isEntryAllowed(entry) && entry.getKey() != null) {
-                keys.add(entry.getKey());
+        for (RecipePoolSlot pool : pools) {
+            for (PatternEntry entry : pool.getEntries()) {
+                if (isEntryAllowed(entry) && entry.getKey() != null) {
+                    keys.add(entry.getKey());
+                }
             }
         }
         return keys.size();
@@ -384,6 +416,15 @@ public final class PatternPoolData {
             count += pool.getSkippedTotal();
         }
         return count;
+    }
+
+    public boolean isScanning() {
+        for (RecipePoolSlot pool : pools) {
+            if (pool.isScanning()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Pool 0 scan is retained for old status/tooltips. */
@@ -411,7 +452,7 @@ public final class PatternPoolData {
 
     public void rescanAll(boolean fillEmpty) {
         for (RecipePoolSlot pool : pools) {
-            pool.rescan(fillEmpty, deleted);
+            pool.startRescan(fillEmpty, deleted, this::onPoolScanFinished);
         }
         updateStatus();
         save();
@@ -423,7 +464,7 @@ public final class PatternPoolData {
         if (pool == null) {
             return;
         }
-        pool.rescan(fillEmpty, deleted);
+        pool.startRescan(fillEmpty, deleted, this::onPoolScanFinished);
         updateStatus();
         save();
         changed();
@@ -432,15 +473,15 @@ public final class PatternPoolData {
     /** Restores runtime scans without recursively posting another AE pattern change. */
     public void ensureScans() {
         for (RecipePoolSlot pool : pools) {
-            if (pool.getMachine() != null && pool.getScan() == null) {
-                pool.rescan(
+            if (pool.getMachine() != null && pool.getScan() == null && !pool.isScanning()) {
+                pool.startRescan(
                     pool.getEntries()
                         .isEmpty(),
-                    deleted);
+                    deleted,
+                    this::onPoolScanFinished);
             }
         }
         updateStatus();
-        save();
     }
 
     public void applyFilters() {
@@ -714,6 +755,10 @@ public final class PatternPoolData {
             return;
         }
         for (RecipePoolSlot pool : pools) {
+            if ("scanning".equals(pool.getStatus())) {
+                status = "scanning";
+                return;
+            }
             if ("scan_error".equals(pool.getStatus())) {
                 status = "scan_error";
                 return;
@@ -723,44 +768,62 @@ public final class PatternPoolData {
     }
 
     public int getMatchedEntryCount(String query) {
-        return searchedEntries(query).size();
+        return viewEntries(query).size();
     }
 
     public PatternEntry getSearchedEntry(int index, String query) {
-        List<PatternEntry> matches = searchedEntries(query);
-        return index >= 0 && index < matches.size() ? matches.get(index) : null;
+        List<PatternEntry> matches = viewEntries(query);
+        if (index < 0 || index >= matches.size()) {
+            return null;
+        }
+        return matches.get(index)
+            .copy();
     }
 
-    private List<PatternEntry> searchedEntries(String query) {
-        List<PatternEntry> all = getEntries();
+    private List<PatternEntry> viewEntries(String query) {
+        List<PatternEntry> all = new ArrayList<>();
+        int globalIndex = 0;
+        for (RecipePoolSlot pool : pools) {
+            for (PatternEntry entry : pool.getEntries()) {
+                entry.setGlobalIndex(globalIndex++);
+                all.add(entry);
+            }
+        }
         String normalized = query == null ? ""
             : query.trim()
                 .toLowerCase(Locale.ROOT);
-        if (normalized.isEmpty()) {
-            return all;
-        }
-        List<PatternEntry> matches = new ArrayList<>();
-        for (PatternEntry entry : all) {
-            String name = entry.getFilterName() == null ? "" : entry.getFilterName();
-            String source = entry.getSource() == null ? "" : entry.getSource();
-            ItemStack display = entry.getDisplay();
-            String displayName = display == null ? "" : display.getDisplayName();
-            if (name.toLowerCase(Locale.ROOT)
-                .contains(normalized)
-                || source.toLowerCase(Locale.ROOT)
+        if (!normalized.isEmpty()) {
+            List<PatternEntry> matches = new ArrayList<>();
+            for (PatternEntry entry : all) {
+                String name = entry.getFilterName() == null ? "" : entry.getFilterName();
+                String source = entry.getSource() == null ? "" : entry.getSource();
+                // The display stack is already resolved into filterName by the
+                // scanner. Only fall back to its display name for old entries.
+                String displayName = "";
+                if (name.isEmpty()) {
+                    ItemStack display = entry.getDisplay();
+                    displayName = display == null ? "" : display.getDisplayName();
+                }
+                if (name.toLowerCase(Locale.ROOT)
                     .contains(normalized)
-                || displayName.toLowerCase(Locale.ROOT)
-                    .contains(normalized)) {
-                matches.add(entry);
+                    || source.toLowerCase(Locale.ROOT)
+                        .contains(normalized)
+                    || displayName.toLowerCase(Locale.ROOT)
+                        .contains(normalized)) {
+                    matches.add(entry);
+                }
             }
+            all = matches;
         }
-        matches.sort(
-            Comparator.comparingInt(PatternEntry::getVoltageTier)
-                .thenComparing(
-                    entry -> entry.getFilterName() == null ? "" : entry.getFilterName(),
-                    String.CASE_INSENSITIVE_ORDER)
-                .thenComparing(entry -> entry.getKey() == null ? "" : entry.getKey()));
-        return matches;
+        if (!normalized.isEmpty()) {
+            all.sort(
+                Comparator.comparingInt(PatternEntry::getVoltageTier)
+                    .thenComparing(
+                        entry -> entry.getFilterName() == null ? "" : entry.getFilterName(),
+                        String.CASE_INSENSITIVE_ORDER)
+                    .thenComparing(entry -> entry.getKey() == null ? "" : entry.getKey()));
+        }
+        return all;
     }
 
     public PatternView toView() {
@@ -791,24 +854,7 @@ public final class PatternPoolData {
             poolView.setEnabledCount(pool.getEnabledCount());
             view.addPool(poolView);
         }
-        List<PatternEntry> allEntries = getEntries();
-        List<PatternEntry> all = searchedEntries(query);
-        Map<String, RecipeSnapshot> snapshotsByKey = new LinkedHashMap<>();
-        for (RecipePoolSlot pool : pools) {
-            ScanResult scan = pool.getScan();
-            if (scan == null) {
-                continue;
-            }
-            for (RecipeSnapshot snapshot : scan.recipes()) {
-                if (snapshot == null || snapshot.getKey() == null) {
-                    continue;
-                }
-                snapshotsByKey.put(
-                    snapshot.getKey()
-                        .value(),
-                    snapshot);
-            }
-        }
+        List<PatternEntry> all = viewEntries(query);
         int maxTier = -1;
         for (PatternEntry entry : all) {
             maxTier = Math.max(maxTier, entry.getVoltageTier());
@@ -825,7 +871,7 @@ public final class PatternPoolData {
                 PatternGroupView group = groups.get(index);
                 view.addGroup(group);
                 for (PatternEntry entry : group.getEntries()) {
-                    addRecipeSnapshot(view, snapshotsByKey, entry);
+                    addRecipeSnapshot(view, selected, entry);
                 }
             }
             view.setGroupCount(groupCount);
@@ -847,7 +893,7 @@ public final class PatternPoolData {
             for (int index = start; index < end; index++) {
                 PatternEntry entry = all.get(index);
                 view.addEntry(entry);
-                addRecipeSnapshot(view, snapshotsByKey, entry);
+                addRecipeSnapshot(view, selected, entry);
             }
             view.setGroupCount(0);
             view.setGroupStartRow(0);
@@ -867,17 +913,17 @@ public final class PatternPoolData {
         view.setFilterMode(filterMode);
         view.setSmartDoubling(smartDoubling);
         view.setMaxRounds(maxRounds);
-        view.setTotalEntries(allEntries.size());
+        view.setTotalEntries(getTotalEntryCount());
         view.setSelectedPool(poolIndex);
         view.setConfiguredPools(configured);
         return view;
     }
 
-    private static void addRecipeSnapshot(PatternView view, Map<String, RecipeSnapshot> snapshots, PatternEntry entry) {
-        if (entry == null || entry.getKey() == null) {
+    private static void addRecipeSnapshot(PatternView view, RecipePoolSlot pool, PatternEntry entry) {
+        if (entry == null || entry.getKey() == null || pool == null) {
             return;
         }
-        RecipeSnapshot snapshot = snapshots.get(entry.getKey());
+        RecipeSnapshot snapshot = pool.getSnapshot(entry.getKey());
         if (snapshot != null) {
             view.addRecipeSnapshot(entry.getKey(), snapshot.toNBT());
         }
@@ -897,7 +943,15 @@ public final class PatternPoolData {
             }
             group.addEntry(entry);
         }
-        return new ArrayList<>(byOutput.values());
+        // A one-off output is not a "same output" group. Keep the grouped view
+        // focused on outputs that actually have at least two recipe alternatives.
+        List<PatternGroupView> groups = new ArrayList<>();
+        for (PatternGroupView group : byOutput.values()) {
+            if (group.getTotalCount() >= 2) {
+                groups.add(group);
+            }
+        }
+        return groups;
     }
 
     private void save() {
@@ -935,9 +989,18 @@ public final class PatternPoolData {
         }
         NBTTagList legacyEntries = new NBTTagList();
         for (PatternEntry entry : legacy.getEntries()) {
+            // The root legacy projection is only useful for very small pools.
+            // Large machine maps must not be duplicated into the ItemStack tag.
+            if (legacyEntries.tagCount() >= 256) {
+                break;
+            }
             legacyEntries.appendTag(entry.toNBT());
         }
-        tag.setTag(TAG_ENTRIES, legacyEntries);
+        if (legacyEntries.tagCount() == 0) {
+            tag.removeTag(TAG_ENTRIES);
+        } else {
+            tag.setTag(TAG_ENTRIES, legacyEntries);
+        }
         NBTTagList filterList = new NBTTagList();
         for (PatternFilter filter : filters) {
             filterList.appendTag(filter.toNBT());

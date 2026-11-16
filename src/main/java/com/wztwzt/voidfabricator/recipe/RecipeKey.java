@@ -27,7 +27,8 @@ public final class RecipeKey {
             byte[] bytes = digest.digest(canonical.getBytes(StandardCharsets.UTF_8));
             StringBuilder hex = new StringBuilder(64);
             for (byte value : bytes) {
-                hex.append(String.format("%02x", value & 0xff));
+                hex.append(Character.forDigit((value >> 4) & 0x0f, 16));
+                hex.append(Character.forDigit(value & 0x0f, 16));
             }
             return new RecipeKey(FORMAT + ":" + hex);
         } catch (NoSuchAlgorithmException exception) {

@@ -3,11 +3,15 @@ package com.wztwzt.voidfabricator;
 import com.wztwzt.voidfabricator.block.BlockVoidFabricator;
 import com.wztwzt.voidfabricator.item.ItemBlockVoidFabricator;
 import com.wztwzt.voidfabricator.item.ItemMachineRecipePoolPattern;
+import com.wztwzt.voidfabricator.pattern.PatternScanManager;
 import com.wztwzt.voidfabricator.tile.TileVoidFabricator;
 
+import cpw.mods.fml.common.FMLCommonHandler;
 import cpw.mods.fml.common.event.FMLInitializationEvent;
 import cpw.mods.fml.common.event.FMLPostInitializationEvent;
 import cpw.mods.fml.common.event.FMLPreInitializationEvent;
+import cpw.mods.fml.common.eventhandler.SubscribeEvent;
+import cpw.mods.fml.common.gameevent.TickEvent;
 import cpw.mods.fml.common.registry.GameRegistry;
 
 /** Server-side and common lifecycle hooks. Keep this class free of client-only imports. */
@@ -25,7 +29,17 @@ public class CommonProxy {
     }
 
     public void init(FMLInitializationEvent event) {
-        // Recipe registration is intentionally deferred until the execution path is runtime-tested.
+        FMLCommonHandler.instance()
+            .bus()
+            .register(new Object() {
+
+                @SubscribeEvent
+                public void onServerTick(TickEvent.ServerTickEvent tickEvent) {
+                    if (tickEvent.phase == TickEvent.Phase.END) {
+                        PatternScanManager.tick();
+                    }
+                }
+            });
     }
 
     public void postInit(FMLPostInitializationEvent event) {

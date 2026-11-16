@@ -1,7 +1,7 @@
 # VoidFabricator — 当前交接记忆
 
-更新时间：2026-11-16（325×309 GT 机壳 UI + 同产物分组 + NEI R/P + 0.3.1-alpha）  
-当前基线：**方块 27 张实体样板 + 每张样板一台机器 + 独立 325×309 GT 标准机壳 UI + 普通 AE 原生下单**。  
+更新时间：2026-11-16（GT 无线 EU 扣电 + 0.3.2-alpha）  
+当前基线：**方块 27 张实体样板 + 每张样板一台机器 + 独立 325×309 GT 标准机壳 UI + 普通 AE 原生下单 + 方块主人无线 EU 原子扣电**。  
 本文取代“一张样板 27 个独立机器池”的交接记录；不要按旧语义继续修改。
 
 ## 1. 用户最终锁定的目标
@@ -35,15 +35,23 @@ E:\wzt\MC\PL genmulu\GT New Horizons 2.9.0_migrated\.minecraft
 最终 jar：
 
 ```text
-build/libs/VoidFabricator-0.3.1-alpha.jar
-大小：157,651 字节
-SHA-256：3509B679E0FB369DDD0DE1715D9C0401F35EC5BB253071A17A3AB46F8E8D0B23
+build/libs/VoidFabricator-0.3.2-alpha.jar
+大小：160,882 字节
+SHA-256：4E8AFB054CE935E096AC9F969CF3961360526F7EFFE719EFC857C7DFC4F66405
 ```
 
 已安装并核对同哈希：
 
 ```text
-E:\wzt\MC\PL genmulu\GT New Horizons 2.9.0_migrated\.minecraft\mods\VoidFabricator-0.3.1-alpha.jar
+E:\wzt\MC\PL genmulu\GT New Horizons 2.9.0_migrated\.minecraft\mods\VoidFabricator-0.3.2-alpha.jar
+大小：160,882 字节
+SHA-256：4E8AFB054CE935E096AC9F969CF3961360526F7EFFE719EFC857C7DFC4F66405
+```
+
+0.3.1 备份：
+
+```text
+build/backup/VoidFabricator-0.3.1-alpha-before-0.3.2.jar
 大小：157,651 字节
 SHA-256：3509B679E0FB369DDD0DE1715D9C0401F35EC5BB253071A17A3AB46F8E8D0B23
 ```
@@ -85,6 +93,8 @@ SHA-256：FDEC249E8023BB258E2AEF3DED1CA634DD06C08A921D6E639094BD360D0C133E
 - 暂时没有样板的旧机器保存在 `legacyMachine`，拆除仍掉落。
 - `reloadPatterns` 逐张样板扫描、筛选并汇总；单槽异常隔离。
 - 相同 RecipeKey 只发布一个 VirtualPatternDetails，记录所有来源样板。
+- `ownerUuid` 写入 NBT `OwnerUUID`；放置时绑定放置玩家，旧方块首次右键绑定当前玩家，之后不改绑。
+- `pushPattern` 先校验输出缓冲、再按 `EnergyCost=EU/t×Duration×multiplier` 检查并原子扣除主人无线 EU，最后消费 AE 输入；缓冲失败退款。
 - 不再保存当前方块机器槽或单总样板。
 
 ### `PatternPoolData.java`
@@ -151,7 +161,15 @@ SHA-256：FDEC249E8023BB258E2AEF3DED1CA634DD06C08A921D6E639094BD360D0C133E
 
 ## 5. AE 发布、执行与智能倍增
 
-普通 AE 终端 → 普通 Crafting CPU → `pushPattern`：只消费 AE 已交付输入，输出进入持久化 OutputBuffer。不私有下单、不二次扣料。
+普通 AE 终端 → 普通 Crafting CPU → `pushPattern`：先检查输出缓冲与方块主人无线 EU，原子扣电后只消费 AE 已交付输入，输出进入持久化 OutputBuffer。不私有下单、不二次扣料。
+
+无线 EU 语义：
+
+- `energy/WirelessGridEnergy` 通过 `WirelessNetworkManager.getUserEU` 读余额，`addEUToGlobalEnergyMap(owner, -cost)` 原子扣电，`+cost` 退款。
+- 计费公式为 `max(0,EUt) × max(0,Duration) × batches`，batches 来自 `validateInputs` 的输入倍率。
+- 余额不足返回 false，不修改输入、不改变电量；输出缓冲 `add` 抛异常时退回本次扣电。
+- 零/负 EU/t 按 0 计，不要求 owner。
+- 超频、并行、机器 tier 与低于 1 tick 的不完美超频没有单独模拟；当前只使用 `RecipeSnapshot` 基础值。
 
 智能倍增仍由 `SmartDoublingIntegration` 可选反射桥接 AE2-QoL `ISmartDoublingMedium`：
 
@@ -168,6 +186,8 @@ SHA-256：FDEC249E8023BB258E2AEF3DED1CA634DD06C08A921D6E639094BD360D0C133E
 - 删除按完整 RecipeKey，重扫不补回。
 - 多张实体样板相同 RecipeKey 只在 AE 发布一次。
 - 重复配方的倍增采用所有来源最严格设置，防止绕过关闭状态。
+- 无线 EU 扣电对象是方块主人，不是样板物品主人；团队按 GT leader 共享。
+- 首次绑定后不静默改绑；旧无主方块必须先由玩家右键一次。
 - 搜索不修改未匹配配方；可见 27 条不是完整池上限。
 - 旧 27 池样板有损折叠并保留 LegacyPools，不宣称无损。
 
@@ -185,14 +205,14 @@ python tools/validate_assets.py
 
 最终结果：
 
-- 本轮 `spotlessApply build --offline` 两次 `BUILD SUCCESSFUL`（一次 compile 失败后修正 lambda 捕获，最终全通过）。
+- 本轮 `spotlessApply build --offline` 最终 `BUILD SUCCESSFUL`（无线 EU 版本）。
 - `spotlessCheck`、`checkstyleMain`、`jar`、`reobfJar`、`build` 全通过。
 - `test NO-SOURCE`。
-- 中英文语言 key 各 260，无重复、无集合差异。
+- 中英文语言 key 各 264，无重复、无集合差异。
 - Java 直接文案引用 95 个，双语均无缺失。
-- Tooltip 31/31；PNG 和 jar 资源检查通过；`ASSET_VALIDATION=PASS`。
-- jar 内 `mcmod.info`、中英文 lang 均与源文件一致。
-- 构建与实例 SHA-256 均为 `3509B679E0FB369DDD0DE1715D9C0401F35EC5BB253071A17A3AB46F8E8D0B23`。
+- Tooltip 32/32；PNG 和 jar 资源检查通过；`ASSET_VALIDATION=PASS`。
+- jar 内 `mcmod.info`、中英文 lang 均与源文件一致；`mcmod.info` 版本 `0.3.2-alpha`。
+- 构建与实例 SHA-256 均为 `4E8AFB054CE935E096AC9F969CF3961360526F7EFFE719EFC857C7DFC4F66405`。
 
 ## 8. 未验证与用户实测清单
 
@@ -206,7 +226,8 @@ python tools/validate_assets.py
 4. 开启“筛选相同”后同产物是否一行、行内备选是否可逐条禁用、行首数量和产物名是否正确；超过 13 个备选时的截断表现。
 5. 鼠标悬停格按 `R` 是否打开真实 GT 物品/流体配方，按 `P` 是否打开自定义样板页并显示输入/输出、电压、持续时间、来源。
 6. 物品/流体图标、流体纹理与数量、Tooltip、排除变暗、红色叉号、黑白名单恢复和全部启停。
-7. 方块 27 槽放入、取出、Shift 点击、拆除掉落、保存重启和旧机器迁移。
+7. 无线 EU：放置方块后 owner 是否正确；无无线电网/零余额时下单是否被拒绝且不进料；余额足够时是否只扣一笔；多份合成是否按倍率扣电；输出缓冲失败是否退款；旧方块首次右键是否完成绑定。
+8. 方块 27 槽放入、取出、Shift 点击、拆除掉落、保存重启和旧机器迁移。
 8. 普通 AE 终端全部去重样板可见、正常下单、普通 CPU 只扣一次料、输出回注。
 9. 重复来源中一张关闭倍增、不同最大轮数、输出缓冲满和断网重连。
 10. 旧单池样板、旧 27 池样板、LegacyPools 和多张样板首次扫描性能。

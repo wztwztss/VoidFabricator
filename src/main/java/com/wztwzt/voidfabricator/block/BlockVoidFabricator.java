@@ -3,7 +3,9 @@ package com.wztwzt.voidfabricator.block;
 import net.minecraft.block.BlockContainer;
 import net.minecraft.block.material.Material;
 import net.minecraft.creativetab.CreativeTabs;
+import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.ChatComponentTranslation;
 import net.minecraft.world.Explosion;
@@ -26,6 +28,17 @@ public class BlockVoidFabricator extends BlockContainer {
     @Override
     public TileEntity createNewTileEntity(World world, int metadata) {
         return new TileVoidFabricator();
+    }
+
+    @Override
+    public void onBlockPlacedBy(World world, int x, int y, int z, EntityLivingBase placer, ItemStack stack) {
+        if (!world.isRemote && placer instanceof EntityPlayer player) {
+            TileEntity tile = world.getTileEntity(x, y, z);
+            if (tile instanceof TileVoidFabricator fabricator) {
+                fabricator.bindOwner(player.getUniqueID());
+            }
+        }
+        super.onBlockPlacedBy(world, x, y, z, placer, stack);
     }
 
     @Override

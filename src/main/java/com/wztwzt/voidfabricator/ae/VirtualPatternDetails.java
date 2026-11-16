@@ -19,11 +19,11 @@ import appeng.util.Platform;
 public final class VirtualPatternDetails implements ICraftingPatternDetails {
 
     private final RecipeSnapshot snapshot;
-    private final ItemStack pattern;
+    private volatile ItemStack pattern;
     private final IAEStack<?>[] inputs;
-    private final IAEStack<?>[] condensedInputs;
+    private volatile IAEStack<?>[] condensedInputs;
     private final IAEStack<?>[] outputs;
-    private final IAEStack<?>[] condensedOutputs;
+    private volatile IAEStack<?>[] condensedOutputs;
     private volatile int priority;
 
     public VirtualPatternDetails(RecipeSnapshot snapshot) {
@@ -32,12 +32,9 @@ public final class VirtualPatternDetails implements ICraftingPatternDetails {
 
     public VirtualPatternDetails(RecipeSnapshot snapshot, int priority) {
         this.snapshot = snapshot;
-        this.pattern = ItemMachineRecipePoolPattern.createToken(snapshot);
         this.priority = priority;
-        this.inputs = toArray(snapshot.getInputs());
-        this.condensedInputs = PatternHelper.convertToCondensedAEList(copy(inputs));
-        this.outputs = toArray(snapshot.getOutputs());
-        this.condensedOutputs = PatternHelper.convertToCondensedAEList(copy(outputs));
+        this.inputs = toArray(snapshot.getInputsView());
+        this.outputs = toArray(snapshot.getOutputsView());
     }
 
     public RecipeSnapshot getSnapshot() {
@@ -46,7 +43,17 @@ public final class VirtualPatternDetails implements ICraftingPatternDetails {
 
     @Override
     public ItemStack getPattern() {
-        return pattern.copy();
+        ItemStack token = pattern;
+        if (token == null) {
+            synchronized (this) {
+                token = pattern;
+                if (token == null) {
+                    token = ItemMachineRecipePoolPattern.createToken(snapshot);
+                    pattern = token;
+                }
+            }
+        }
+        return token.copy();
     }
 
     @Override
@@ -71,12 +78,12 @@ public final class VirtualPatternDetails implements ICraftingPatternDetails {
 
     @Override
     public IAEItemStack[] getCondensedInputs() {
-        return toLegacyItems(condensedInputs);
+        return toLegacyItems(condensedInputs());
     }
 
     @Override
     public IAEItemStack[] getCondensedOutputs() {
-        return toLegacyItems(condensedOutputs);
+        return toLegacyItems(condensedOutputs());
     }
 
     @Override
@@ -96,12 +103,12 @@ public final class VirtualPatternDetails implements ICraftingPatternDetails {
 
     @Override
     public IAEStack<?>[] getCondensedAEInputs() {
-        return copy(condensedInputs);
+        return copy(condensedInputs());
     }
 
     @Override
     public IAEStack<?>[] getCondensedAEOutputs() {
-        return copy(condensedOutputs);
+        return copy(condensedOutputs());
     }
 
     @Override
@@ -139,6 +146,34 @@ public final class VirtualPatternDetails implements ICraftingPatternDetails {
     public int hashCode() {
         return snapshot.getKey()
             .hashCode();
+    }
+
+    private IAEStack<?>[] condensedInputs() {
+        IAEStack<?>[] value = condensedInputs;
+        if (value == null) {
+            synchronized (this) {
+                value = condensedInputs;
+                if (value == null) {
+                    value = PatternHelper.convertToCondensedAEList(copy(inputs));
+                    condensedInputs = value;
+                }
+            }
+        }
+        return value;
+    }
+
+    private IAEStack<?>[] condensedOutputs() {
+        IAEStack<?>[] value = condensedOutputs;
+        if (value == null) {
+            synchronized (this) {
+                value = condensedOutputs;
+                if (value == null) {
+                    value = PatternHelper.convertToCondensedAEList(copy(outputs));
+                    condensedOutputs = value;
+                }
+            }
+        }
+        return value;
     }
 
     private static IAEStack<?>[] toArray(List<IAEStack<?>> stacks) {

@@ -31,14 +31,25 @@ public final class RecipeSnapshot {
 
     public RecipeSnapshot(String sourceId, List<IAEStack<?>> inputs, List<IAEStack<?>> virtualInputs,
         List<IAEStack<?>> outputs, int euPerTick, int duration, int specialValue) {
+        this(sourceId, inputs, virtualInputs, outputs, euPerTick, duration, specialValue, true);
+    }
+
+    /** Scanner-owned lists are never mutated after construction; avoid a second deep copy. */
+    static RecipeSnapshot fromScan(String sourceId, List<IAEStack<?>> inputs, List<IAEStack<?>> virtualInputs,
+        List<IAEStack<?>> outputs, int euPerTick, int duration, int specialValue) {
+        return new RecipeSnapshot(sourceId, inputs, virtualInputs, outputs, euPerTick, duration, specialValue, false);
+    }
+
+    private RecipeSnapshot(String sourceId, List<IAEStack<?>> inputs, List<IAEStack<?>> virtualInputs,
+        List<IAEStack<?>> outputs, int euPerTick, int duration, int specialValue, boolean defensiveCopy) {
         if (sourceId == null || sourceId.trim()
             .isEmpty() || sourceId.length() > 512) {
             throw new IllegalArgumentException("Invalid recipe source id");
         }
         this.sourceId = sourceId;
-        this.inputs = copyStacks(inputs, "inputs");
-        this.virtualInputs = copyStacks(virtualInputs, "virtualInputs");
-        this.outputs = copyStacks(outputs, "outputs");
+        this.inputs = copyStacks(inputs, "inputs", defensiveCopy);
+        this.virtualInputs = copyStacks(virtualInputs, "virtualInputs", defensiveCopy);
+        this.outputs = copyStacks(outputs, "outputs", defensiveCopy);
         if (this.inputs.isEmpty()) {
             throw new IllegalArgumentException("AE processing patterns require at least one real input");
         }
@@ -63,12 +74,40 @@ public final class RecipeSnapshot {
         return copyStacks(inputs, "inputs");
     }
 
+    public int getInputCount() {
+        return inputs.size();
+    }
+
+    /** Internal read-only view for pattern projection; callers must not mutate the stacks. */
+    public List<IAEStack<?>> getInputsView() {
+        return inputs;
+    }
+
     public List<IAEStack<?>> getVirtualInputs() {
         return copyStacks(virtualInputs, "virtualInputs");
     }
 
+    public int getVirtualInputCount() {
+        return virtualInputs.size();
+    }
+
     public List<IAEStack<?>> getOutputs() {
         return copyStacks(outputs, "outputs");
+    }
+
+    public int getOutputCount() {
+        return outputs.size();
+    }
+
+    /** Internal read-only view for pattern projection; callers must not mutate the stacks. */
+    public List<IAEStack<?>> getOutputsView() {
+        return outputs;
+    }
+
+    public IAEStack<?> getFirstOutput() {
+        return outputs.isEmpty() ? null
+            : outputs.get(0)
+                .copy();
     }
 
     public int getEuPerTick() {
@@ -200,6 +239,10 @@ public final class RecipeSnapshot {
     }
 
     private static List<IAEStack<?>> copyStacks(List<IAEStack<?>> stacks, String name) {
+        return copyStacks(stacks, name, true);
+    }
+
+    private static List<IAEStack<?>> copyStacks(List<IAEStack<?>> stacks, String name, boolean defensiveCopy) {
         if (stacks == null || stacks.size() > MAX_STACKS) {
             throw new IllegalArgumentException("Invalid recipe " + name + " list");
         }
@@ -208,9 +251,9 @@ public final class RecipeSnapshot {
             if (stack == null || stack.getStackSize() <= 0) {
                 throw new IllegalArgumentException("Invalid stack in recipe " + name);
             }
-            copies.add(stack.copy());
+            copies.add(defensiveCopy ? stack.copy() : stack);
         }
-        return Collections.unmodifiableList(new ArrayList<>(copies));
+        return Collections.unmodifiableList(copies);
     }
 
     @SuppressWarnings("unchecked")

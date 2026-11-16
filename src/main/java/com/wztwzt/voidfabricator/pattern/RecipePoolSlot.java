@@ -29,7 +29,11 @@ public final class RecipePoolSlot {
     private final int index;
     private ItemStack machine;
     private final List<PatternEntry> entries = new ArrayList<>();
+    private final Set<String> disabledKeys = new HashSet<>();
+    private final Map<String, RecipeSnapshot> snapshotsByKey = new LinkedHashMap<>();
     private ScanResult scan;
+    private boolean scanning;
+    private int scanGeneration;
     private String status = "no_machine";
 
     public RecipePoolSlot(int index) {
@@ -49,11 +53,15 @@ public final class RecipePoolSlot {
     }
 
     public void setMachine(ItemStack newMachine) {
+        scanGeneration++;
+        scanning = false;
         machine = newMachine == null ? null : newMachine.copy();
         if (machine != null) {
             machine.stackSize = 1;
         }
         entries.clear();
+        disabledKeys.clear();
+        snapshotsByKey.clear();
         scan = null;
         status = machine == null ? "no_machine" : "no_entries";
     }
@@ -101,6 +109,10 @@ public final class RecipePoolSlot {
         return scan;
     }
 
+    public RecipeSnapshot getSnapshot(String key) {
+        return key == null ? null : snapshotsByKey.get(key);
+    }
+
     public String getStatus() {
         return status;
     }
@@ -109,24 +121,79 @@ public final class RecipePoolSlot {
         return scan == null ? 0 : scan.skippedTotal();
     }
 
-    public void rescan(boolean fillEmpty, Set<String> deleted) {
+    public boolean isScanning() {
+        return scanning;
+    }
+
+    /**
+     * Starts a cooperative scan and returns immediately. {@code onDone} runs on
+     * the server thread after the scan has been applied to this slot.
+     */
+    public void startRescan(boolean fillEmpty, Set<String> deleted, Runnable onDone) {
         if (machine == null) {
             entries.clear();
             scan = null;
+            scanning = false;
             status = "no_machine";
             return;
         }
-        try {
-            scan = GTMachineScanner.scan(machine);
-        } catch (RuntimeException exception) {
-            scan = null;
-            status = "scan_error";
+        int generation = ++scanGeneration;
+        scanning = true;
+        status = "scanning";
+        Map<String, Boolean> previousEnabled = new LinkedHashMap<>();
+        for (PatternEntry old : entries) {
+            if (old.getKey() != null) {
+                previousEnabled.put(old.getKey(), old.isEnabled());
+            }
+        }
+        Set<String> deletedSnapshot = new HashSet<>(deleted);
+        ItemStack machineSnapshot = machine.copy();
+        ScanResult cached = GTMachineScanner.getCached(machine);
+        if (cached != null) {
+            completeScan(generation, machineSnapshot, cached, fillEmpty, deletedSnapshot, previousEnabled);
+            if (onDone != null) {
+                onDone.run();
+            }
             return;
         }
+        GTMachineScanner.ScanSession session;
+        try {
+            session = GTMachineScanner.begin(machine);
+        } catch (RuntimeException exception) {
+            failScan(generation, "scan_error");
+            if (onDone != null) {
+                onDone.run();
+            }
+            return;
+        }
+        PatternScanManager
+            .submit(this, session, generation, machineSnapshot, fillEmpty, deletedSnapshot, previousEnabled, onDone);
+    }
 
+    /** Legacy synchronous entry point retained for callers outside the GUI. */
+    public void rescan(boolean fillEmpty, Set<String> deleted) {
+        startRescan(fillEmpty, deleted, null);
+    }
+
+    boolean completeScan(int generation, ItemStack scannedMachine, ScanResult result, boolean fillEmpty,
+        Set<String> deleted, Map<String, Boolean> previousEnabled) {
+        if (generation != scanGeneration || result == null) {
+            return false;
+        }
+        if (machine == null || scannedMachine == null
+            || !GTMachineScanner.getFingerprint(machine)
+                .equals(GTMachineScanner.getFingerprint(scannedMachine))) {
+            return false;
+        }
+        scan = result;
+        snapshotsByKey.clear();
         Map<String, RecipeSnapshot> byKey = new LinkedHashMap<>();
         for (RecipeSnapshot snapshot : scan.recipes()) {
             byKey.put(
+                snapshot.getKey()
+                    .value(),
+                snapshot);
+            snapshotsByKey.put(
                 snapshot.getKey()
                     .value(),
                 snapshot);
@@ -159,9 +226,34 @@ public final class RecipePoolSlot {
                 }
             }
         }
+        for (PatternEntry entry : next) {
+            Boolean oldState = previousEnabled.get(entry.getKey());
+            if (oldState != null) {
+                entry.setEnabled(oldState);
+            } else if (disabledKeys.contains(entry.getKey())) {
+                entry.setEnabled(false);
+            }
+        }
+        disabledKeys.clear();
+        for (PatternEntry entry : next) {
+            if (!entry.isEnabled() && entry.getKey() != null) {
+                disabledKeys.add(entry.getKey());
+            }
+        }
         entries.clear();
         entries.addAll(next);
+        scanning = false;
         status = entries.isEmpty() ? "no_entries" : "ready";
+        return true;
+    }
+
+    void failScan(int generation, String reason) {
+        if (generation != scanGeneration) {
+            return;
+        }
+        scanning = false;
+        scan = null;
+        status = reason == null ? "scan_error" : reason;
     }
 
     public NBTTagCompound toNBT() {
@@ -169,11 +261,21 @@ public final class RecipePoolSlot {
         if (machine != null) {
             tag.setTag("Machine", machine.writeToNBT(new NBTTagCompound()));
         }
-        NBTTagList entryList = new NBTTagList();
+        // Large pools (assembler maps can contain >10k recipes) must never be
+        // persisted as one ItemStack NBT list: doing so duplicates every entry
+        // and makes inventory sync/save take tens of seconds. Only the small
+        // per-key state is stored; entries are rebuilt from the cached scan.
+        NBTTagList disabledList = new NBTTagList();
+        Set<String> disabled = new HashSet<>(disabledKeys);
         for (PatternEntry entry : entries) {
-            entryList.appendTag(entry.toNBT());
+            if (!entry.isEnabled() && entry.getKey() != null) {
+                disabled.add(entry.getKey());
+            }
         }
-        tag.setTag("Entries", entryList);
+        for (String key : disabled) {
+            disabledList.appendTag(new net.minecraft.nbt.NBTTagString(key));
+        }
+        tag.setTag("DisabledKeys", disabledList);
         return tag;
     }
 
@@ -187,38 +289,42 @@ public final class RecipePoolSlot {
                 machine.stackSize = 1;
             }
         }
+        NBTTagList disabledList = tag.getTagList("DisabledKeys", 8);
+        for (int keyIndex = 0; keyIndex < disabledList.tagCount(); keyIndex++) {
+            String key = disabledList.getStringTagAt(keyIndex);
+            if (!key.isEmpty()) {
+                disabledKeys.add(key);
+            }
+        }
+        // Legacy builds stored the full entry list. Read it once for migration,
+        // but the next scan/load will use the compact DisabledKeys representation.
         NBTTagList entryList = tag.getTagList("Entries", 10);
         for (int entryIndex = 0; entryIndex < entryList.tagCount(); entryIndex++) {
             PatternEntry entry = PatternEntry.fromNBT(entryList.getCompoundTagAt(entryIndex));
             if (entry != null) {
                 entry.setPoolIndex(index);
                 entries.add(entry);
+                if (!entry.isEnabled() && entry.getKey() != null) {
+                    disabledKeys.add(entry.getKey());
+                }
             }
         }
         status = machine == null ? "no_machine" : (entries.isEmpty() ? "no_entries" : "ready");
     }
 
     private static PatternEntry buildEntry(RecipeSnapshot snapshot) {
-        if (snapshot.getOutputs()
-            .isEmpty()) {
+        if (snapshot.getOutputCount() == 0) {
             return null;
         }
-        IAEStack<?> first = snapshot.getOutputs()
-            .get(0);
+        IAEStack<?> first = snapshot.getFirstOutput();
         PatternEntry entry = new PatternEntry();
         entry.setKey(
             snapshot.getKey()
                 .value());
         entry.setEnabled(true);
-        entry.setInputs(
-            snapshot.getInputs()
-                .size());
-        entry.setVirtualInputs(
-            snapshot.getVirtualInputs()
-                .size());
-        entry.setOutputs(
-            snapshot.getOutputs()
-                .size());
+        entry.setInputs(snapshot.getInputCount());
+        entry.setVirtualInputs(snapshot.getVirtualInputCount());
+        entry.setOutputs(snapshot.getOutputCount());
         entry.setEuPerTick(snapshot.getEuPerTick());
         entry.setDuration(snapshot.getDuration());
         entry.setSource(snapshot.getSourceId());

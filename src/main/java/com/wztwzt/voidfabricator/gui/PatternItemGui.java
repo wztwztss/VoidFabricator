@@ -48,8 +48,8 @@ public final class PatternItemGui {
         // mirrored onto the player's current hand slot immediately, and again
         // when the panel closes, so machine insert/extract cannot be lost.
         pool.setOnSaved(() -> mirrorToHand(inventoryData, pool));
-        pool.ensureScans();
         PatternGuiSession session = new PatternGuiSession(pool.toView(), pool, null, false);
+        pool.ensureScans();
         syncManager.addCloseListener(p -> {
             pool.persistNow();
             p.inventory.markDirty();

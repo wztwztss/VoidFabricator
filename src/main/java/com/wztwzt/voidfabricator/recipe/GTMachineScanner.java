@@ -32,6 +32,8 @@ public final class GTMachineScanner {
 
     private static final Logger LOGGER = LogManager.getLogger(GTMachineScanner.class);
     private static final String ADAPTER_VERSION = "gt-generic-v1";
+    private static final int CACHE_LIMIT = 8;
+    private static final Map<String, ScanResult> CACHE = new LinkedHashMap<>();
 
     private GTMachineScanner() {}
 
@@ -56,6 +58,29 @@ public final class GTMachineScanner {
     }
 
     public static ScanResult scan(ItemStack stack) {
+        String fingerprint = getFingerprint(stack);
+        if (fingerprint == null) {
+            throw new IllegalArgumentException("The installed item is not a GregTech machine");
+        }
+        ScanResult cached = cached(fingerprint);
+        if (cached != null) {
+            return cached;
+        }
+        ScanSession session = begin(stack);
+        while (!session.step(8_000_000L, 256)) {
+            // Deliberately bounded for the legacy synchronous entry point.
+        }
+        ScanResult result = session.finish();
+        remember(fingerprint, result);
+        return result;
+    }
+
+    /**
+     * Starts a chunked scan. The caller must drive {@link ScanSession#step(long, int)}
+     * from the server thread so a large map (for example GT assembler's >12k
+     * recipes) never blocks one tick for tens of seconds.
+     */
+    public static ScanSession begin(ItemStack stack) {
         if (!isMachine(stack)) {
             throw new IllegalArgumentException("The installed item is not a GregTech machine");
         }
@@ -63,34 +88,126 @@ public final class GTMachineScanner {
         if (machine == null) {
             throw new IllegalArgumentException("The GregTech machine did not provide a meta tile entity");
         }
-
+        String fingerprint = getFingerprint(stack);
+        if (fingerprint == null) {
+            throw new IllegalArgumentException("The installed machine has no stable fingerprint");
+        }
         Map<String, RecipeMap<?>> recipeMaps = discoverRecipeMaps(machine);
-        Map<String, Integer> skipped = new TreeMap<>();
-        Map<String, RecipeSnapshot> recipes = new LinkedHashMap<>();
+        List<RecipeMap<?>> maps = new ArrayList<>();
+        List<List<GTRecipe>> recipes = new ArrayList<>();
+        List<Set<GTUtility.ItemId>> nonConsumed = new ArrayList<>();
         for (RecipeMap<?> recipeMap : recipeMaps.values()) {
-            for (GTRecipe recipe : recipeMap.getAllRecipes()) {
-                try {
-                    RecipeSnapshot snapshot = convert(recipeMap, recipe, skipped);
-                    if (snapshot != null) {
-                        RecipeSnapshot previous = recipes.putIfAbsent(
-                            snapshot.getKey()
-                                .value(),
-                            snapshot);
-                        if (previous != null) {
-                            increment(skipped, "duplicate");
-                        }
-                    }
-                } catch (RuntimeException exception) {
-                    increment(skipped, "conversion_error");
-                    LOGGER.warn("Failed to convert GT recipe from {}", recipeMap.unlocalizedName, exception);
-                }
+            maps.add(recipeMap);
+            recipes.add(new ArrayList<>(recipeMap.getAllRecipes()));
+            nonConsumed.add(recipeMap.getNonConsumedInputItemIds());
+        }
+        return new ScanSession(fingerprint, maps, recipes, nonConsumed);
+    }
+
+    private static ScanResult cached(String fingerprint) {
+        synchronized (CACHE) {
+            return CACHE.get(fingerprint);
+        }
+    }
+
+    /** Returns a previously completed scan for this machine item, if cached. */
+    public static ScanResult getCached(ItemStack stack) {
+        String fingerprint = getFingerprint(stack);
+        return fingerprint == null ? null : cached(fingerprint);
+    }
+
+    private static void remember(String fingerprint, ScanResult result) {
+        synchronized (CACHE) {
+            CACHE.put(fingerprint, result);
+            while (CACHE.size() > CACHE_LIMIT) {
+                String oldest = CACHE.keySet()
+                    .iterator()
+                    .next();
+                CACHE.remove(oldest);
             }
         }
-        return new ScanResult(
-            getFingerprint(stack),
-            recipeMaps.size(),
-            Collections.unmodifiableList(new ArrayList<>(recipes.values())),
-            skipped);
+    }
+
+    public static final class ScanSession {
+
+        private final String fingerprint;
+        private final List<RecipeMap<?>> maps;
+        private final List<List<GTRecipe>> recipes;
+        private final List<Set<GTUtility.ItemId>> nonConsumed;
+        private final Map<String, Integer> skipped = new TreeMap<>();
+        private final Map<String, RecipeSnapshot> converted = new LinkedHashMap<>();
+        private int mapIndex;
+        private int recipeIndex;
+        private boolean finished;
+
+        private ScanSession(String fingerprint, List<RecipeMap<?>> maps, List<List<GTRecipe>> recipes,
+            List<Set<GTUtility.ItemId>> nonConsumed) {
+            this.fingerprint = fingerprint;
+            this.maps = maps;
+            this.recipes = recipes;
+            this.nonConsumed = nonConsumed;
+        }
+
+        /** Processes recipes until the time/record budget is exhausted. */
+        public boolean step(long timeBudgetNanos, int recordBudget) {
+            if (finished) {
+                return true;
+            }
+            long deadline = System.nanoTime() + Math.max(1_000_000L, timeBudgetNanos);
+            int processed = 0;
+            while (mapIndex < maps.size()) {
+                RecipeMap<?> recipeMap = maps.get(mapIndex);
+                List<GTRecipe> recipeList = recipes.get(mapIndex);
+                Set<GTUtility.ItemId> nonConsumedIds = nonConsumed.get(mapIndex);
+                while (recipeIndex < recipeList.size()) {
+                    GTRecipe recipe = recipeList.get(recipeIndex++);
+                    try {
+                        RecipeSnapshot snapshot = convert(recipeMap, recipe, skipped, nonConsumedIds);
+                        if (snapshot != null) {
+                            RecipeSnapshot previous = converted.putIfAbsent(
+                                snapshot.getKey()
+                                    .value(),
+                                snapshot);
+                            if (previous != null) {
+                                increment(skipped, "duplicate");
+                            }
+                        }
+                    } catch (RuntimeException exception) {
+                        increment(skipped, "conversion_error");
+                        LOGGER.warn("Failed to convert GT recipe from {}", recipeMap.unlocalizedName, exception);
+                    }
+                    processed++;
+                    if (processed >= recordBudget || System.nanoTime() >= deadline) {
+                        return false;
+                    }
+                }
+                mapIndex++;
+                recipeIndex = 0;
+            }
+            finished = true;
+            return true;
+        }
+
+        public boolean isFinished() {
+            return finished;
+        }
+
+        public ScanResult finish() {
+            if (!finished) {
+                throw new IllegalStateException("Recipe scan has not completed");
+            }
+            return new ScanResult(
+                fingerprint,
+                maps.size(),
+                Collections.unmodifiableList(new ArrayList<>(converted.values())),
+                skipped);
+        }
+
+        public ScanResult finishAndCache() {
+            ScanResult result = finish();
+            remember(fingerprint, result);
+            return result;
+        }
     }
 
     private static Map<String, RecipeMap<?>> discoverRecipeMaps(IMetaTileEntity machine) {
@@ -148,7 +265,8 @@ public final class GTMachineScanner {
         }
     }
 
-    private static RecipeSnapshot convert(RecipeMap<?> recipeMap, GTRecipe recipe, Map<String, Integer> skipped) {
+    private static RecipeSnapshot convert(RecipeMap<?> recipeMap, GTRecipe recipe, Map<String, Integer> skipped,
+        Set<GTUtility.ItemId> nonConsumed) {
         if (recipe == null || !recipe.mEnabled || recipe.mFakeRecipe) {
             increment(skipped, "disabled_or_fake");
             return null;
@@ -167,7 +285,6 @@ public final class GTMachineScanner {
         List<IAEStack<?>> inputs = new ArrayList<>();
         List<IAEStack<?>> virtualInputs = new ArrayList<>();
         List<IAEStack<?>> outputs = new ArrayList<>();
-        Set<GTUtility.ItemId> nonConsumed = recipeMap.getNonConsumedInputItemIds();
 
         if (recipe.mInputs != null) {
             for (ItemStack input : recipe.mInputs) {
@@ -240,14 +357,8 @@ public final class GTMachineScanner {
         }
 
         String source = recipeMap.unlocalizedName + '#' + ADAPTER_VERSION;
-        return new RecipeSnapshot(
-            source,
-            inputs,
-            virtualInputs,
-            outputs,
-            recipe.mEUt,
-            recipe.mDuration,
-            recipe.mSpecialValue);
+        return RecipeSnapshot
+            .fromScan(source, inputs, virtualInputs, outputs, recipe.mEUt, recipe.mDuration, recipe.mSpecialValue);
     }
 
     private static boolean appendSpecialItems(Object special, List<IAEStack<?>> virtualInputs) {

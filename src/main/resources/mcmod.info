@@ -3,8 +3,8 @@
 	"modList": [{
 		"modid": "voidfabricator",
 		"name": "Void Fabricator",
-		"description": "Standalone GTNH 1.7.10 AE-native virtual crafting provider. The block holds 27 physical machine recipe patterns; each pattern configures one GT machine through its own 325x309 GT-style, searchable, scrollable 13x7 icon UI with voltage-tier rows, click-to-exclude, one-row-per-output grouping (alternatives in the same row), deletion/restore, direct fluid textures and optional AE2-QoL smart doubling. R/P look up the real GT recipe and the virtual pattern from NEI. Patterns are visible and orderable in normal AE crafting terminals and execute through standard Crafting CPU clusters. No private CPU, no execution-time second input charge; duplicate RecipeKeys are published once.",
-		"version": "0.3.1-alpha",
+		"description": "Standalone GTNH 1.7.10 AE-native virtual crafting provider. The block holds 27 physical machine recipe patterns; each pattern configures one GT machine through its own 325x309 GT-style, searchable, scrollable 13x7 icon UI with voltage-tier rows, click-to-exclude, one-row-per-output grouping (alternatives in the same row), deletion/restore, direct fluid textures and optional AE2-QoL smart doubling. Accepted crafts debit the block owner's GregTech wireless EU grid once at recipe EU/t x duration x batches, after checking the balance. R/P look up the real GT recipe and the virtual pattern from NEI. Patterns are visible and orderable in normal AE crafting terminals and execute through standard Crafting CPU clusters. No private CPU, no execution-time second input charge; duplicate RecipeKeys are published once.",
+		"version": "0.3.3-alpha",
 		"mcversion": "1.7.10",
 		"url": "",
 		"updateUrl": "",

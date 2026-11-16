@@ -377,7 +377,9 @@ public final class PatternItemPanel {
         if (!entry.isEnabled()) {
             base = new DrawableStack(disabledDim(), disabledBorder(), redCross());
         } else if (session.isEntryFiltered(localIndex)) {
-            base = filteredDim();
+            // Excluded entries must read as excluded, not merely darker: keep the
+            // same red border and cross used by manually disabled entries.
+            base = new DrawableStack(filteredDim(), disabledBorder(), redCross());
         }
         if (session.getSelectedIndex() == entry.getGlobalIndex()) {
             return new DrawableStack(

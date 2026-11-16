@@ -24,6 +24,7 @@ public class ItemBlockVoidFabricator extends ItemBlock {
         add(tooltip, "requirement", EnumChatFormatting.GOLD);
         add(tooltip, "no_private_cpu", EnumChatFormatting.DARK_AQUA);
         add(tooltip, "consumption", EnumChatFormatting.GRAY);
+        add(tooltip, "energy", EnumChatFormatting.GOLD);
         add(tooltip, "buffer", EnumChatFormatting.BLUE);
         add(tooltip, "speed", EnumChatFormatting.GRAY);
         add(tooltip, "install", EnumChatFormatting.YELLOW);

@@ -4,10 +4,10 @@
 
 A standalone GTNH 1.7.10 addon that publishes GregTech machine recipes as **native AE virtual processing patterns**. Players see and order them in a normal AE crafting terminal; a normal AE `CraftingCPUCluster` pulls the inputs and executes the job. The block is only an `ICraftingProvider` / `ICraftingMedium`; there is no private CPU, no custom recursive planner, and no second input charge at execution time.
 
-- Current version: `0.3.1-alpha`
+- Current version: `0.3.3-alpha`
 - Repository: <https://github.com/wztwztss/VoidFabricator>
-- Release: <https://github.com/wztwztss/VoidFabricator/releases/tag/v0.3.1-alpha>
-- Build artifact: `157,651` bytes, SHA-256 `3509B679E0FB369DDD0DE1715D9C0401F35EC5BB253071A17A3AB46F8E8D0B23`
+- Previous Release: <https://github.com/wztwztss/VoidFabricator/releases/tag/v0.3.1-alpha> (`0.3.2-alpha` / `0.3.3-alpha` not published yet)
+- Build artifact: `172,033` bytes, SHA-256 `BEF5C27863F846BFE96C5B7A121BC88783F96FAABFA86A85E970D4B62EA60800`
 
 ![Pattern UI layout preview](docs/ui-preview-pattern-ui-325x309.png)
 
@@ -37,7 +37,7 @@ normal AE crafting terminal: visible and orderable
         ↓
 normal CraftingCPUCluster extracts inputs
         ↓
-TileVoidFabricator.pushPattern consumes only inputs already delivered by AE
+TileVoidFabricator.pushPattern verifies the block owner's wireless EU, consumes only inputs already delivered by AE
         ↓
 OutputBuffer reserves N output batches and re-injects them into AE
 ```
@@ -46,7 +46,7 @@ OutputBuffer reserves N output batches and re-injects them into AE
 
 220×286 MUI2 panel:
 
-- The header shows AE online state, published count, in-flight batches, and buffer type.
+- The header shows AE online state, published count, in-flight batches, and wireless-EU rejection status.
 - The center is a 9×3 physical pattern grid supporting normal insertion, extraction, and Shift-click.
 - There is no separate GT machine slot, single pattern slot, or bulk-extract button.
 - Right-clicking the block with a GT machine in hand tells the player to put the machine into the pattern's own UI.
@@ -97,7 +97,7 @@ Right-click the `Machine Recipe Pool Pattern` to open a **325×309 standard GT p
 
 - `ICraftingProvider` publishes all deduplicated processing patterns to a normal AE network.
 - Uses a normal AE crafting CPU; no private CPU and no custom recursive planner.
-- `pushPattern` checks the inputs already delivered by AE, consumes them on success, and registers the outputs. On failure it does not mutate inputs.
+- `pushPattern` checks the inputs already delivered by AE, checks/debits the owner's wireless EU, consumes the inputs on success, and registers the outputs. On failure it does not mutate inputs and does not leave a partial energy debit.
 - It does not pull a second time from ME during execution.
 - Undelivered item/fluid outputs go into a bounded, persistent `OutputBuffer`, which survives disconnects and retries after reconnect.
 
@@ -110,6 +110,17 @@ Right-click the `Machine Recipe Pool Pattern` to open a **325×309 standard GT p
 - If every source enables it, the strictest round limit among sources wins, preventing bypass of one pattern's configuration.
 - Without AE2-QoL, it falls back to a normal one-round Medium; the configuration remains stored.
 
+### Wireless EU power
+
+- Accepted crafts debit the **block owner's GregTech wireless EU map**, the same pool used by GT wireless output/input hatches, through `WirelessNetworkManager`.
+- The block owner is bound when the block is placed. An existing block without `OwnerUUID` binds the first player who opens it; later players do not silently re-bind it.
+- The owner must be the block owner, not the pattern item owner. In a team, GT resolves the charge through the team leader, so the team pool is shared.
+- Before consuming AE inputs, `pushPattern` checks the owner's `getUserEU` balance and then performs one atomic debit with `addEUToGlobalEnergyMap(owner, -cost)`; insufficient balance is rejected without a partial charge.
+- Cost is `recipe EU/t × duration (ticks) × requested batches`. Zero or negative EU/t costs zero, so those recipes do not require an owner.
+- If the output buffer rejects the craft after the debit, the charge is refunded and the status becomes `buffer_error`.
+- The block GUI reports `no_owner` or `insufficient_power`; this is status text only, not a chat notification.
+- GT overclocking is treated as total-EU-neutral (4× EU/t for 1/4 duration). Machine tier, parallel processing, and sub-tick imperfect-overclock edge cases are not separately modeled; the calculation uses the stored `RecipeSnapshot` base EU/t and duration.
+
 ### Usage
 
 1. Right-click the pattern item to open its own UI.
@@ -119,7 +130,7 @@ Right-click the `Machine Recipe Pool Pattern` to open a **325×309 standard GT p
 5. Configure smart doubling and max rounds as needed.
 6. Close the item UI. The pattern stays in the main-hand slot and its configuration is written back to NBT.
 7. Sneak-right-click the Void Fabricator to install the pattern; up to 27 physical patterns are supported.
-8. Order normally in a standard AE crafting terminal and execute with a standard AE CPU.
+8. Order normally in a standard AE crafting terminal and execute with a standard AE CPU; make sure the block owner has enough EU in the GT wireless grid.
 
 ### NBT and migration
 
@@ -149,6 +160,9 @@ Right-click the `Machine Recipe Pool Pattern` to open a **325×309 standard GT p
 - The old three-tab `PatternEditorPanel` / `PatternEditorGui` remain as unused dead code and are not current entry points.
 - The old `docs/ui-preview-pattern-pools.png` and `docs/ui-preview-pattern-browser.png` belong to the rejected 27-pool two-page design and do not represent the current UI. The current static layout preview is `docs/ui-preview-pattern-ui-325x309.png`, generated by `tools/RenderPatternUi.java`; it is a layout preview, not an in-game screenshot.
 - GTNH in-game verification is performed by the user. The assistant did not start the game and does not treat a successful compile as an in-game pass.
+- Wireless EU cost uses the stored base `RecipeSnapshot` EU/t and duration. GT overclock/parallel/tier effects and sub-tick imperfect overclock are not re-simulated; perfect overclock is assumed to keep total EU unchanged.
+- A legacy block with no `OwnerUUID` is rejected with `no_owner` if AE schedules it before any player opens it; opening the block once binds the current player and resolves this.
+- Insufficient EU is visible in the block GUI status only; no chat message or terminal-side balance display is implemented.
 
 ### Build and validation
 
@@ -169,11 +183,11 @@ Static results for this build:
 - `checkstyleMain`: passed
 - `jar` / `reobfJar` / `build`: passed
 - `test`: `NO-SOURCE`
-- Chinese/English language keys: 260 each, no duplicates or set differences
+- Chinese/English language keys: 264 each, no duplicates or set differences
 - Java direct text references: 95, no missing keys in either language
-- Tooltips: 31/31 in both languages
+- Tooltips: 32/32 in both languages
 - Textures, tooltips, and jar resources: `ASSET_VALIDATION=PASS`
-- Current artifact: `157,651` bytes, SHA-256 `3509B679E0FB369DDD0DE1715D9C0401F35EC5BB253071A17A3AB46F8E8D0B23`
+- Current artifact: `160,882` bytes, SHA-256 `4E8AFB054CE935E096AC9F969CF3961360526F7EFFE719EFC857C7DFC4F66405`
 - GTNH in-game verification: not performed; owned by the user
 
 The final artifact and instance hash are also recorded in [`docs/AGENT_HANDOFF_MEMORY.md`](docs/AGENT_HANDOFF_MEMORY.md).
@@ -192,7 +206,9 @@ gui/PatternGuiSession.java         search, first-row offset, slider, server-side
 gui/PatternItemGui.java            main-hand item entry, current-hand NBT mirror write-back
 gui/PatternMachineHandler.java     the pattern's single machine slot
 gui/VoidFabricatorGui.java         220×286 block status and 9×3 physical pattern slots
-tile/TileVoidFabricator.java       27-slot NBT, publication aggregation, source tracking, Provider/Medium
+block/BlockVoidFabricator.java    block registration, placement owner binding, protection
+tile/TileVoidFabricator.java       27-slot NBT, owner binding, wireless EU charge, publication aggregation, Provider/Medium
+energy/WirelessGridEnergy.java     GT wireless EU cost, balance, atomic debit, refund and user initialization
 recipe/                            GT scan, RecipeSnapshot, RecipeKey
 ae/                                output buffer and optional AE2-QoL bridge
 client/                            NEI R/P bridge and custom void_pattern usage page
@@ -223,11 +239,11 @@ Detailed design and review:
 
 独立的 GTNH 1.7.10 模组：将 GregTech 机器配方发布为 **AE 原生虚拟处理样板**。玩家在普通 AE 合成终端看到并下单，由普通 Crafting CPU 抽料和执行；方块只承担 Provider/Medium，不提供私有 CPU，也不在执行时二次扣料。
 
-当前版本：`0.3.1-alpha`。
+当前版本：`0.3.3-alpha`。
 
 仓库：<https://github.com/wztwztss/VoidFabricator>  
-Release：<https://github.com/wztwztss/VoidFabricator/releases/tag/v0.3.1-alpha>  
-构建产物：`157,651` 字节，SHA-256 `3509B679E0FB369DDD0DE1715D9C0401F35EC5BB253071A17A3AB46F8E8D0B23`
+上一个 Release：<https://github.com/wztwztss/VoidFabricator/releases/tag/v0.3.1-alpha>（`0.3.2-alpha` / `0.3.3-alpha` 尚未发布）  
+构建产物：`172,033` 字节，SHA-256 `BEF5C27863F846BFE96C5B7A121BC88783F96FAABFA86A85E970D4B62EA60800`
 
 ### 当前核心语义
 
@@ -251,7 +267,7 @@ ICraftingProvider 发布 VirtualPatternDetails
         ↓
 普通 CraftingCPUCluster 抽取输入
         ↓
-TileVoidFabricator.pushPattern 只消费 AE 已交付输入
+TileVoidFabricator.pushPattern 校验方块主人的无线 EU、只消费 AE 已交付输入
         ↓
 OutputBuffer 预留下 N 批输出并回注 AE
 ```
@@ -260,7 +276,7 @@ OutputBuffer 预留下 N 批输出并回注 AE
 
 220×286 MUI2 面板：
 
-- 顶部显示 AE 在线状态、已发布数量、在途批次和缓冲类型。
+- 顶部显示 AE 在线状态、已发布数量、在途批次和无线 EU 拒绝状态。
 - 中部为 9×3 实体样板格，支持正常放入、取出和 Shift 点击。
 - 不再有独立 GT 机器槽、单总样板槽或整组取出按钮。
 - 手持 GT 机器右键方块时提示先把机器放入样板自己的 UI。
@@ -311,7 +327,7 @@ OutputBuffer 预留下 N 批输出并回注 AE
 
 - `ICraftingProvider` 向普通 AE 网络发布全部去重后的处理样板。
 - 使用普通 AE Crafting CPU，不注册私有 CPU，不自研递归规划器。
-- `pushPattern` 逐槽验证 AE 已交付输入，成功后消费这些输入并登记输出；失败不修改输入。
+- `pushPattern` 逐槽验证 AE 已交付输入，校验并扣除方块主人的无线 EU，成功后消费这些输入并登记输出；失败不修改输入，也不留下半笔扣电。
 - 不在执行时再次从 ME 扣料。
 - 未交付物品/流体进入有界、持久化 `OutputBuffer`，断网保留并重连重试。
 
@@ -324,6 +340,17 @@ OutputBuffer 预留下 N 批输出并回注 AE
 - 所有来源均开启时，采用来源中最严格的轮数限制，防止绕过某张样板的配置。
 - 未安装 AE2-QoL 时回退普通单轮 Medium，配置仍保留。
 
+### 无线 EU 供电
+
+- 被 AE 接受的合成会通过 `WirelessNetworkManager` 从**方块主人的 GregTech 无线 EU 池**扣电；该池与 GT 无线输出仓/输入仓使用的是同一个玩家/团队池。
+- 方块放置时绑定主人；已存在但没有 `OwnerUUID` 的旧方块由第一个打开它的玩家绑定，之后不会静默改绑给其他人。
+- 扣电对象是方块主人，不是样板物品主人。玩家在团队中时，GT 按团队 leader 结算，因此使用团队共享池。
+- 在消费 AE 输入前，`pushPattern` 先读取主人的 `getUserEU` 余额，再通过 `addEUToGlobalEnergyMap(owner, -cost)` 做一次原子扣电；余额不足直接拒绝，不会部分扣电。
+- 扣电金额为“配方 EU/t × 工作时长（tick）× 本次工作份数”。EU/t 为零或负时按 0 计，因此这类配方不要求绑定主人。
+- 扣电后若输出缓冲拒绝该批产物，会退回本次扣电，并把状态置为 `buffer_error`。
+- 方块 GUI 会显示 `no_owner` 或 `insufficient_power`；目前只有状态文案，没有聊天栏提示。
+- GT 超频按“总 EU 基本不变”处理（4 倍功率、1/4 时长）；机器 tier、并行和低于 1 tick 的不完美超频边界没有单独模拟，计算使用样板中保存的 `RecipeSnapshot` 基础 EU/t 与时长。
+
 ### 操作方式
 
 1. 手持样板普通右键，打开样板自己的 UI。
@@ -333,7 +360,7 @@ OutputBuffer 预留下 N 批输出并回注 AE
 5. 按需开启智能倍增和最大轮数。
 6. 关闭物品 UI；样板保留在原主手槽，配置写回其 NBT。
 7. 潜行右键虚空合成机安装样板，最多安装 27 张。
-8. 在普通 AE 合成终端正常下单，使用普通 AE CPU 执行。
+8. 在普通 AE 合成终端正常下单，使用普通 AE CPU 执行；确认方块主人在 GT 无线电网中有足够 EU。
 
 ### NBT 与迁移
 
@@ -363,6 +390,9 @@ OutputBuffer 预留下 N 批输出并回注 AE
 - 旧三页签 `PatternEditorPanel` / `PatternEditorGui` 保留为未使用死代码，不是当前入口。
 - 旧 `docs/ui-preview-pattern-pools.png`、`docs/ui-preview-pattern-browser.png` 仍属于已否决的 27 池双页面，不代表当前 UI。当前静态布局预览为 `docs/ui-preview-pattern-ui-325x309.png`，由 `tools/RenderPatternUi.java` 生成；它是布局预览，不是游戏实机截图。
 - GTNH 游戏内验证由用户执行；助手未启动游戏，不把编译成功当作实机通过。
+- 无线 EU 扣电使用样板中保存的基础 `RecipeSnapshot` EU/t 与时长；GT 超频、并行和机器 tier 对每份耗电的影响，以及低于 1 tick 的不完美超频，没有重新模拟；完美超频按总 EU 不变处理。
+- 旧方块没有 `OwnerUUID` 时，如果 AE 在任何玩家打开方块前就调度它，会以 `no_owner` 拒绝；打开一次方块绑定当前玩家后才会恢复。
+- 电量不足目前只显示在方块 GUI 状态中，没有聊天栏提示，也没有终端侧余额显示。
 
 ### 构建与校验
 
@@ -383,11 +413,11 @@ python tools/validate_assets.py
 - `checkstyleMain`：通过
 - `jar` / `reobfJar` / `build`：通过
 - `test`：`NO-SOURCE`
-- 中英文语言键：各 260，无重复、无集合差异
+- 中英文语言键：各 264，无重复、无集合差异
 - Java 直接文案引用：95 个，双语均无缺失
-- Tooltip：中英文各 31/31
+- Tooltip：中英文各 32/32
 - 纹理、Tooltip 和 jar 资源：`ASSET_VALIDATION=PASS`
-- 当前构建产物：157,651 字节，SHA-256 `3509B679E0FB369DDD0DE1715D9C0401F35EC5BB253071A17A3AB46F8E8D0B23`
+- 当前构建产物：160,882 字节，SHA-256 `4E8AFB054CE935E096AC9F969CF3961360526F7EFFE719EFC857C7DFC4F66405`
 - GTNH 游戏内验证：未执行，由用户负责
 
 最终产物和实例哈希见 `docs/AGENT_HANDOFF_MEMORY.md`。
@@ -406,7 +436,9 @@ gui/PatternGuiSession.java        搜索、首行偏移、滑块与服务端条�
 gui/PatternItemGui.java           主手物品入口、当前手槽 NBT 镜像写回
 gui/PatternMachineHandler.java    当前样板唯一机器槽
 gui/VoidFabricatorGui.java        220×286 方块状态与 9×3 实体样板槽
-tile/TileVoidFabricator.java      27 槽 NBT、发布汇总、来源跟踪、Provider/Medium
+block/BlockVoidFabricator.java    方块注册、放置绑定主人、保护
+tile/TileVoidFabricator.java      27 槽 NBT、主人绑定、无线 EU 扣电、发布汇总、Provider/Medium
+energy/WirelessGridEnergy.java    GT 无线 EU 计费、余额、原子扣电、退款与用户初始化
 recipe/                           GT 扫描、RecipeSnapshot、RecipeKey
 ae/                               输出缓冲与 AE2-QoL 可选桥接
 client/                           NEI R/P 桥接与自定义 void_pattern 页面
