@@ -1,6 +1,6 @@
 # VoidFabricator — 当前交接记忆
 
-更新时间：2026-11-16（0.3.6-alpha：配方图标空白修复、A/R/P 轮询键盘桥接、悬停兜底）  
+更新时间：2026-11-16（0.3.7-alpha：主界面状态卡/样板格/说明/背包间距重排）  
 当前基线：**方块 27 张实体样板 + 每张样板一台机器 + 独立 325×309 GT 标准机壳 UI + 普通 AE 原生下单 + 方块主人无线 EU 原子扣电**。  
 本文取代“一张样板 27 个独立机器池”的交接记录；不要按旧语义继续修改。
 
@@ -35,17 +35,17 @@ E:\wzt\MC\PL genmulu\GT New Horizons 2.9.0_migrated\.minecraft
 最终 jar：
 
 ```text
-build/libs/VoidFabricator-0.3.6-alpha.jar
-大小：174,879 字节
-SHA-256：670CD6C2835BBBE23941AD5D41533FA86EAF52CA41BCD96C870F146BE9CEDFD4
+build/libs/VoidFabricator-0.3.7-alpha.jar
+大小：174,850 字节
+SHA-256：4CA1E30D4AD8B47A4C2CCC22BBD72A984C054E537FD53E3E999D3E6FF395D984
 ```
 
 已安装并核对同哈希：
 
 ```text
-E:\wzt\MC\PL genmulu\GT New Horizons 2.9.0_migrated\.minecraft\mods\VoidFabricator-0.3.6-alpha.jar
-大小：174,879 字节
-SHA-256：670CD6C2835BBBE23941AD5D41533FA86EAF52CA41BCD96C870F146BE9CEDFD4
+E:\wzt\MC\PL genmulu\GT New Horizons 2.9.0_migrated\.minecraft\mods\VoidFabricator-0.3.7-alpha.jar
+大小：174,850 字节
+SHA-256：4CA1E30D4AD8B47A4C2CCC22BBD72A984C054E537FD53E3E999D3E6FF395D984
 ```
 
 0.3.2 备份：

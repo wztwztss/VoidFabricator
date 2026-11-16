@@ -24,7 +24,7 @@ import com.wztwzt.voidfabricator.tile.TileVoidFabricator;
 public final class VoidFabricatorGui {
 
     private static final int PANEL_WIDTH = 220;
-    private static final int PANEL_HEIGHT = 286;
+    private static final int PANEL_HEIGHT = 306;
     private static final String SLOT_GROUP = "void_fabricator_patterns";
 
     private VoidFabricatorGui() {}
@@ -81,13 +81,13 @@ public final class VoidFabricatorGui {
                     skipped,
                     online))
             .child(
-                new TextWidget<>(IKey.lang("voidfabricator.gui.pattern_slots")).pos(9, 94)
+                new TextWidget<>(IKey.lang("voidfabricator.gui.pattern_slots")).pos(9, 101)
                     .scale(0.85f)
                     .color(0xFFA8C4CB));
 
         for (int slot = 0; slot < TileVoidFabricator.PATTERN_SLOTS; slot++) {
             int x = 29 + (slot % 9) * 18;
-            int y = 108 + (slot / 9) * 18;
+            int y = 115 + (slot / 9) * 18;
             panel.child(
                 new ItemSlot().slot(new ContractSlot(tile, slot).slotGroup(SLOT_GROUP))
                     .pos(x, y)
@@ -95,14 +95,14 @@ public final class VoidFabricatorGui {
         }
 
         panel.child(
-            new TextWidget<>(IKey.lang("voidfabricator.gui.pattern_hint")).pos(9, 168)
+            new TextWidget<>(IKey.lang("voidfabricator.gui.pattern_hint")).pos(9, 177)
                 .maxWidth(202)
-                .scale(0.8f)
+                .scale(0.75f)
                 .color(0xFF718D96))
             .child(
-                new TextWidget<>(IKey.lang("voidfabricator.gui.pattern_hint2")).pos(9, 181)
+                new TextWidget<>(IKey.lang("voidfabricator.gui.pattern_hint2")).pos(9, 195)
                     .maxWidth(202)
-                    .scale(0.8f)
+                    .scale(0.75f)
                     .color(0xFF718D96));
         return panel;
     }
@@ -111,7 +111,7 @@ public final class VoidFabricatorGui {
         StringSyncValue wirelessBalance, IntSyncValue published, LongSyncValue pendingBatches,
         IntSyncValue pendingTypes, IntSyncValue skipped, BooleanSyncValue online) {
         ParentWidget<?> status = new ParentWidget<>().pos(8, 33)
-            .size(204, 56)
+            .size(204, 64)
             .background(
                 new Rectangle().color(0xFF071015)
                     .cornerRadius(2),
@@ -141,13 +141,13 @@ public final class VoidFabricatorGui {
         TextWidget<?> filteredLine = new TextWidget<>(
             IKey.dynamic(
                 () -> StatCollector.translateToLocalFormatted("voidfabricator.gui.filtered", skipped.getIntValue())));
-        filteredLine.pos(5, 28)
+        filteredLine.pos(5, 31)
             .maxWidth(194)
             .color(0xFF809AA2);
         status.child(filteredLine);
 
         TextWidget<?> stateLine = new TextWidget<>(IKey.dynamic(() -> stateText(state)));
-        stateLine.pos(5, 41)
+        stateLine.pos(5, 45)
             .maxWidth(128)
             .color(() -> stateColor(state));
         status.child(stateLine);
@@ -157,16 +157,16 @@ public final class VoidFabricatorGui {
                 () -> StatCollector.translateToLocal(
                     online.getBoolValue() ? "voidfabricator.gui.network.online"
                         : "voidfabricator.gui.network.offline")));
-        networkLine.pos(132, 41)
+        networkLine.pos(132, 45)
             .size(65, 10)
             .textAlign(Alignment.TopRight)
             .color(() -> online.getBoolValue() ? 0xFF55DFA6 : 0xFFF08B78);
         status.child(networkLine);
 
         TextWidget<?> wirelessLine = new TextWidget<>(IKey.dynamic(() -> wirelessText(wirelessState, wirelessBalance)));
-        wirelessLine.pos(5, 49)
-            .size(194, 6)
-            .scale(0.55f)
+        wirelessLine.pos(5, 56)
+            .size(194, 7)
+            .scale(0.6f)
             .maxWidth(194)
             .color(() -> wirelessColor(wirelessState));
         status.child(wirelessLine);

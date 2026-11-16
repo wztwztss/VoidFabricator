@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.3.7-alpha — 2026-11-16
+
+### English
+
+- Rebalanced the Void Fabricator block panel: panel height is now 306 px, the status card is 64 px tall, and its published/pending/filtered/state/network/wireless lines are spaced instead of clipped at the bottom.
+- Moved the 9×3 physical pattern grid down, shortened the two hint lines, and separated them so they no longer overlap each other. The player inventory is pushed lower by the taller panel, leaving breathing room between the pattern grid, hints and inventory.
+- Bumped the mod version to `0.3.7-alpha`; static build passed. In-game verification remains with the user.
+
+### 简体中文
+
+- 重新分配虚空合成机主界面间距：面板高度改为 306 px，状态卡改为 64 px，高亮/在途/过滤/状态/AE/无线 EU 各行拉开，不再被底部边框裁切。
+- 9×3 实体样板格整体下移；两条说明文字缩短并拉开，不再互相重叠；面板变高后玩家背包随之下移，样板格、说明和背包之间留出空隙。
+- 版本提升到 `0.3.7-alpha`，静态构建通过，实机验证仍由用户执行。
+
 ## 0.3.6-alpha — 2026-11-16
 
 ### English
