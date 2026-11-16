@@ -31,15 +31,22 @@ public class CommonProxy {
     public void init(FMLInitializationEvent event) {
         FMLCommonHandler.instance()
             .bus()
-            .register(new Object() {
+            .register(new ServerTickHandler());
+    }
 
-                @SubscribeEvent
-                public void onServerTick(TickEvent.ServerTickEvent tickEvent) {
-                    if (tickEvent.phase == TickEvent.Phase.END) {
-                        PatternScanManager.tick();
-                    }
-                }
-            });
+    /**
+     * Must be a public class with a public handler method: FML's ASM event handler
+     * lives in a different class loader, so an anonymous/package-private handler
+     * causes IllegalAccessError on the first server tick.
+     */
+    public static final class ServerTickHandler {
+
+        @SubscribeEvent
+        public void onServerTick(TickEvent.ServerTickEvent tickEvent) {
+            if (tickEvent.phase == TickEvent.Phase.END) {
+                PatternScanManager.tick();
+            }
+        }
     }
 
     public void postInit(FMLPostInitializationEvent event) {

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.4-alpha — 2026-11-16
+
+### English
+
+- Fixed the server-tick `IllegalAccessError` that crashed the integrated server and prevented the save from loading: the FML event handler was an anonymous package-private class, which the ASM event handler could not access. It is now a public static `ServerTickHandler` with a public `@SubscribeEvent` method.
+- Bumped the mod version to `0.3.4-alpha`; static build passed and the handler bytecode access flags were verified public. In-game verification remains with the user.
+
+### 简体中文
+
+- 修复服务端 tick 的 `IllegalAccessError`：原先注册的是匿名包私有事件处理类，FML 的 ASM 事件处理器在另一个类加载器里访问不到它，导致服务端 tick 崩溃、存档无法进入。现改为公开静态 `ServerTickHandler`，处理器方法为 public `@SubscribeEvent`。
+- 版本升至 `0.3.4-alpha`；静态构建通过，并用 `javap` 确认处理器类和方法的访问标志为 public。实机验证仍由用户执行。
+
 ## 0.3.3-alpha — 2026-11-16
 
 ### English

@@ -4,10 +4,10 @@
 
 A standalone GTNH 1.7.10 addon that publishes GregTech machine recipes as **native AE virtual processing patterns**. Players see and order them in a normal AE crafting terminal; a normal AE `CraftingCPUCluster` pulls the inputs and executes the job. The block is only an `ICraftingProvider` / `ICraftingMedium`; there is no private CPU, no custom recursive planner, and no second input charge at execution time.
 
-- Current version: `0.3.3-alpha`
+- Current version: `0.3.4-alpha`
 - Repository: <https://github.com/wztwztss/VoidFabricator>
-- Previous Release: <https://github.com/wztwztss/VoidFabricator/releases/tag/v0.3.1-alpha> (`0.3.2-alpha` / `0.3.3-alpha` not published yet)
-- Build artifact: `172,033` bytes, SHA-256 `BEF5C27863F846BFE96C5B7A121BC88783F96FAABFA86A85E970D4B62EA60800`
+- Previous Release: <https://github.com/wztwztss/VoidFabricator/releases/tag/v0.3.1-alpha> (`0.3.2-alpha` / `0.3.3-alpha` / `0.3.4-alpha` not published yet)
+- Build artifact: `171,991` bytes, SHA-256 `FF48997D0EA7990FE61E951D8BEEFF5B77A4B3748106DBF3755F25C7A0F3A477`
 
 ![Pattern UI layout preview](docs/ui-preview-pattern-ui-325x309.png)
 
@@ -239,11 +239,11 @@ Detailed design and review:
 
 独立的 GTNH 1.7.10 模组：将 GregTech 机器配方发布为 **AE 原生虚拟处理样板**。玩家在普通 AE 合成终端看到并下单，由普通 Crafting CPU 抽料和执行；方块只承担 Provider/Medium，不提供私有 CPU，也不在执行时二次扣料。
 
-当前版本：`0.3.3-alpha`。
+当前版本：`0.3.4-alpha`。
 
 仓库：<https://github.com/wztwztss/VoidFabricator>  
 上一个 Release：<https://github.com/wztwztss/VoidFabricator/releases/tag/v0.3.1-alpha>（`0.3.2-alpha` / `0.3.3-alpha` 尚未发布）  
-构建产物：`172,033` 字节，SHA-256 `BEF5C27863F846BFE96C5B7A121BC88783F96FAABFA86A85E970D4B62EA60800`
+构建产物：`171,991` 字节，SHA-256 `FF48997D0EA7990FE61E951D8BEEFF5B77A4B3748106DBF3755F25C7A0F3A477`
 
 ### 当前核心语义
 
