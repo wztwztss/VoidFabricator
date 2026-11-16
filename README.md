@@ -7,7 +7,7 @@ A standalone GTNH 1.7.10 addon that publishes GregTech machine recipes as **nati
 - Current version: `0.3.6-alpha`
 - Repository: <https://github.com/wztwztss/VoidFabricator>
 - Previous Release: <https://github.com/wztwztss/VoidFabricator/releases/tag/v0.3.1-alpha> (`0.3.2-alpha` / `0.3.3-alpha` / `0.3.4-alpha` / `0.3.5-alpha` / `0.3.6-alpha` not published yet)
-- Build artifact: `174,887` bytes, SHA-256 `EB173BCB65FC7914C1E6B80BB4C5D834918AAB2EDC3110D5C57D6C13217F8568`
+- Build artifact: `174,879` bytes, SHA-256 `670CD6C2835BBBE23941AD5D41533FA86EAF52CA41BCD96C870F146BE9CEDFD4`
 
 ![Pattern UI layout preview](docs/ui-preview-pattern-ui-325x309.png)
 
@@ -243,7 +243,7 @@ Detailed design and review:
 
 仓库：<https://github.com/wztwztss/VoidFabricator>  
 上一个 Release：<https://github.com/wztwztss/VoidFabricator/releases/tag/v0.3.1-alpha>（`0.3.2-alpha` / `0.3.3-alpha` / `0.3.4-alpha` / `0.3.5-alpha` / `0.3.6-alpha` 尚未发布）  
-构建产物：`174,887` 字节，SHA-256 `EB173BCB65FC7914C1E6B80BB4C5D834918AAB2EDC3110D5C57D6C13217F8568`
+构建产物：`174,879` 字节，SHA-256 `670CD6C2835BBBE23941AD5D41533FA86EAF52CA41BCD96C870F146BE9CEDFD4`
 
 ### 当前核心语义
 

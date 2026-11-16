@@ -333,6 +333,27 @@ public final class PatternItemPanel {
                 .scale(0.5f)
                 .textAlign(Alignment.CenterRight)
                 .color(0xFFFFFFFF));
+        // ButtonWidget is a SingleChildWidget: calling .child(icon) and then
+        // .child(overlay) on the button does not create two layers, it disposes
+        // the icon and replaces it. Put the overlay inside the icon parent after
+        // the item/fluid/text children instead. The icon parent draws its
+        // children in insertion order, so the red cross stays above the icon;
+        // the button keeps a single stable child and still receives hover.
+        icon.child(new IDrawable.DrawableWidget(new DynamicDrawable(() -> cellOverlay(session, localIndex))) {
+
+            @Override
+            public boolean canHover() {
+                return false;
+            }
+
+            @Override
+            public boolean canHoverThrough() {
+                return true;
+            }
+        }.disableThemeBackground(true)
+            .disableHoverThemeBackground(true)
+            .pos(0, 0)
+            .size(CELL_SIZE, CELL_SIZE));
 
         IDrawable hover = new DrawableStack(
             GuiTextures.SLOT_ITEM,
@@ -343,24 +364,6 @@ public final class PatternItemPanel {
             .background(new DynamicDrawable(() -> cellBackground(session, localIndex)))
             .hoverBackground(new DynamicDrawable(() -> cellHover(session, localIndex, hover)))
             .child(icon)
-            // WidgetTree draws children after overlay(), so a red cross placed in overlay()
-            // was always covered by the 18x18 item icon. This child is appended after the
-            // icon and therefore renders visibly above it.
-            .child(new IDrawable.DrawableWidget(new DynamicDrawable(() -> cellOverlay(session, localIndex))) {
-
-                @Override
-                public boolean canHover() {
-                    return false;
-                }
-
-                @Override
-                public boolean canHoverThrough() {
-                    return true;
-                }
-            }.disableThemeBackground(true)
-                .disableHoverThemeBackground(true)
-                .pos(0, 0)
-                .size(CELL_SIZE, CELL_SIZE))
             .syncHandler(new InteractionSyncHandler().setOnMousePressed(delta -> {
                 int globalIndex = session.entryGlobalIndex(localIndex);
                 if (globalIndex < 0) {

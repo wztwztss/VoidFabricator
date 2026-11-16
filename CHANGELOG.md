@@ -4,13 +4,13 @@
 
 ### English
 
-- Fixed the empty 13×7 recipe grid: the red-X overlay child of each cell was a theme-backed `DrawableWidget` sized over the whole cell, so MUI's theme background was painted after the item/fluid icon and hid every icon while leaving the tooltip intact. The overlay now disables both the normal and hover theme background; the icon, red cross and darkening layer are visible again.
+- Fixed the empty 13×7 recipe grid: `PatternCellButton` is a `SingleChildWidget`, so calling `.child(icon)` and then `.child(red-X overlay)` on the button disposed the icon and replaced it with the overlay. The overlay also kept MUI's theme background and covered the whole cell. The overlay now lives inside the icon parent after the item/fluid/text children, with both theme backgrounds disabled; item/fluid icons, the amount line, the red cross and darkening are visible again.
 - Reworked the A/R/P bridge to poll the physical keyboard state on `ClientTickEvent` instead of relying only on FML's `KeyInputEvent`. Literal A/R/P and NEI's configured `bookmark.add`, `recipe.recipe`, `recipe.usage` bindings are accepted; a focused text field is respected, and `ClientPatternHover` is also refreshed from each cell's actual hover state as a fallback.
 - Bumped the mod version to `0.3.6-alpha`; static build and bytecode checks passed. In-game verification remains with the user.
 
 ### 简体中文
 
-- 修复 13×7 配方格整片空白：每个格子的红叉覆盖层是一个带主题背景的 `DrawableWidget`，尺寸覆盖整个格子，MUI 会在物品/流体图标之后绘制主题背景，把图标全部盖住但 tooltip 仍然存在。覆盖层现在同时禁用普通和悬停主题背景，图标、红叉和暗色层恢复可见。
+- 修复 13×7 配方格整片空白：`PatternCellButton` 是 `SingleChildWidget`，先 `.child(icon)` 再 `.child(红叉覆盖层)` 会把图标 dispose 掉并替换成覆盖层；覆盖层又保留了 MUI 主题背景，继续盖住整个格子。现在覆盖层放进图标父容器、排在物品/流体/数量文本之后，并禁用两种主题背景，物品/流体图标、数量行、红叉和暗色层恢复可见。
 - A/R/P 键改为在 `ClientTickEvent` 中轮询真实键盘状态，不再只依赖 FML 的 `KeyInputEvent`。继续兼容字面 A/R/P 与 NEI 配置的 `bookmark.add`、`recipe.recipe`、`recipe.usage`；焦点在文本框时不触发，并增加从格子实际悬停状态刷新 `ClientPatternHover` 的兜底。
 - 版本提升到 `0.3.6-alpha`；静态构建和字节码检查通过，实机验证仍由用户执行。
 
