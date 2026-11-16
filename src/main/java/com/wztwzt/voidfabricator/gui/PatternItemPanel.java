@@ -33,6 +33,7 @@ import com.cleanroommc.modularui.widgets.SliderWidget;
 import com.cleanroommc.modularui.widgets.TextWidget;
 import com.cleanroommc.modularui.widgets.slot.ItemSlot;
 import com.cleanroommc.modularui.widgets.textfield.TextFieldWidget;
+import com.wztwzt.voidfabricator.client.ClientPatternHover;
 import com.wztwzt.voidfabricator.pattern.PatternEntry;
 import com.wztwzt.voidfabricator.pattern.PatternGroupView;
 import com.wztwzt.voidfabricator.pattern.PatternPoolData;
@@ -356,7 +357,9 @@ public final class PatternItemPanel {
                 public boolean canHoverThrough() {
                     return true;
                 }
-            }.pos(0, 0)
+            }.disableThemeBackground(true)
+                .disableHoverThemeBackground(true)
+                .pos(0, 0)
                 .size(CELL_SIZE, CELL_SIZE))
             .syncHandler(new InteractionSyncHandler().setOnMousePressed(delta -> {
                 int globalIndex = session.entryGlobalIndex(localIndex);
@@ -692,17 +695,31 @@ public final class PatternItemPanel {
         }
 
         @Override
+        public void onUpdate() {
+            super.onUpdate();
+            // MUI normally calls onMouseStartHover/onMouseEndHover, but keep the
+            // bridge in sync with the actual hover state as a fallback. Some
+            // widget stacks with canHoverThrough children do not deliver the
+            // start callback reliably on every MUI build.
+            if (isHovering()) {
+                ClientPatternHover.set(session, localIndex);
+            } else {
+                ClientPatternHover.clear(session, localIndex);
+            }
+        }
+
+        @Override
         public void onMouseStartHover() {
             super.onMouseStartHover();
             session.setHovered(localIndex);
-            com.wztwzt.voidfabricator.client.ClientPatternHover.set(session, localIndex);
+            ClientPatternHover.set(session, localIndex);
         }
 
         @Override
         public void onMouseEndHover() {
             super.onMouseEndHover();
             session.clearHovered(localIndex);
-            com.wztwzt.voidfabricator.client.ClientPatternHover.clear(session, localIndex);
+            ClientPatternHover.clear(session, localIndex);
         }
     }
 
