@@ -6,7 +6,7 @@ A standalone GTNH 1.7.10 addon that publishes GregTech machine recipes as **nati
 
 - Current version: `0.3.7-alpha`
 - Repository: <https://github.com/wztwztss/VoidFabricator>
-- Previous Release: <https://github.com/wztwztss/VoidFabricator/releases/tag/v0.3.1-alpha> (`0.3.2-alpha` / `0.3.3-alpha` / `0.3.4-alpha` / `0.3.5-alpha` / `0.3.6-alpha` / `0.3.7-alpha` not published yet)
+- Release: <https://github.com/wztwztss/VoidFabricator/releases/tag/v0.3.7-alpha> (cumulative since `v0.3.1-alpha`)
 - Build artifact: `174,850` bytes, SHA-256 `4CA1E30D4AD8B47A4C2CCC22BBD72A984C054E537FD53E3E999D3E6FF395D984`
 
 ![Pattern UI layout preview](docs/ui-preview-pattern-ui-325x309.png)
@@ -44,7 +44,7 @@ OutputBuffer reserves N output batches and re-injects them into AE
 
 ### Block UI
 
-220×286 MUI2 panel:
+220×306 MUI2 panel:
 
 - The header shows AE online state, published count, in-flight batches, and wireless-EU rejection status.
 - The center is a 9×3 physical pattern grid supporting normal insertion, extraction, and Shift-click.
@@ -187,7 +187,7 @@ Static results for this build:
 - Java direct text references: 95, no missing keys in either language
 - Tooltips: 32/32 in both languages
 - Textures, tooltips, and jar resources: `ASSET_VALIDATION=PASS`
-- Current artifact: `160,882` bytes, SHA-256 `4E8AFB054CE935E096AC9F969CF3961360526F7EFFE719EFC857C7DFC4F66405`
+- Current artifact: `174,850` bytes, SHA-256 `4CA1E30D4AD8B47A4C2CCC22BBD72A984C054E537FD53E3E999D3E6FF395D984`
 - GTNH in-game verification: not performed; owned by the user
 
 The final artifact and instance hash are also recorded in [`docs/AGENT_HANDOFF_MEMORY.md`](docs/AGENT_HANDOFF_MEMORY.md).
@@ -205,7 +205,7 @@ gui/PatternItemPanel.java          325×309 GT standard panel, 13×7 single-mach
 gui/PatternGuiSession.java         search, first-row offset, slider, server-side entry actions
 gui/PatternItemGui.java            main-hand item entry, current-hand NBT mirror write-back
 gui/PatternMachineHandler.java     the pattern's single machine slot
-gui/VoidFabricatorGui.java         220×286 block status and 9×3 physical pattern slots
+gui/VoidFabricatorGui.java         220×306 block status and 9×3 physical pattern slots
 block/BlockVoidFabricator.java    block registration, placement owner binding, protection
 tile/TileVoidFabricator.java       27-slot NBT, owner binding, wireless EU charge, publication aggregation, Provider/Medium
 energy/WirelessGridEnergy.java     GT wireless EU cost, balance, atomic debit, refund and user initialization
@@ -242,7 +242,7 @@ Detailed design and review:
 当前版本：`0.3.7-alpha`。
 
 仓库：<https://github.com/wztwztss/VoidFabricator>  
-上一个 Release：<https://github.com/wztwztss/VoidFabricator/releases/tag/v0.3.1-alpha>（`0.3.2-alpha` / `0.3.3-alpha` / `0.3.4-alpha` / `0.3.5-alpha` / `0.3.6-alpha` / `0.3.7-alpha` 尚未发布）  
+Release：<https://github.com/wztwztss/VoidFabricator/releases/tag/v0.3.7-alpha>（自 `v0.3.1-alpha` 起的累积版本）  
 构建产物：`174,850` 字节，SHA-256 `4CA1E30D4AD8B47A4C2CCC22BBD72A984C054E537FD53E3E999D3E6FF395D984`
 
 ### 当前核心语义
@@ -274,7 +274,7 @@ OutputBuffer 预留下 N 批输出并回注 AE
 
 ### 方块 UI
 
-220×286 MUI2 面板：
+220×306 MUI2 面板：
 
 - 顶部显示 AE 在线状态、已发布数量、在途批次和无线 EU 拒绝状态。
 - 中部为 9×3 实体样板格，支持正常放入、取出和 Shift 点击。
@@ -417,7 +417,7 @@ python tools/validate_assets.py
 - Java 直接文案引用：95 个，双语均无缺失
 - Tooltip：中英文各 32/32
 - 纹理、Tooltip 和 jar 资源：`ASSET_VALIDATION=PASS`
-- 当前构建产物：160,882 字节，SHA-256 `4E8AFB054CE935E096AC9F969CF3961360526F7EFFE719EFC857C7DFC4F66405`
+- 当前构建产物：174,850 字节，SHA-256 `4CA1E30D4AD8B47A4C2CCC22BBD72A984C054E537FD53E3E999D3E6FF395D984`
 - GTNH 游戏内验证：未执行，由用户负责
 
 最终产物和实例哈希见 `docs/AGENT_HANDOFF_MEMORY.md`。
@@ -435,7 +435,7 @@ gui/PatternItemPanel.java         325×309 GT 标准机壳、13×7 单机器配�
 gui/PatternGuiSession.java        搜索、首行偏移、滑块与服务端条目操作
 gui/PatternItemGui.java           主手物品入口、当前手槽 NBT 镜像写回
 gui/PatternMachineHandler.java    当前样板唯一机器槽
-gui/VoidFabricatorGui.java        220×286 方块状态与 9×3 实体样板槽
+gui/VoidFabricatorGui.java        220×306 方块状态与 9×3 实体样板槽
 block/BlockVoidFabricator.java    方块注册、放置绑定主人、保护
 tile/TileVoidFabricator.java      27 槽 NBT、主人绑定、无线 EU 扣电、发布汇总、Provider/Medium
 energy/WirelessGridEnergy.java    GT 无线 EU 计费、余额、原子扣电、退款与用户初始化
